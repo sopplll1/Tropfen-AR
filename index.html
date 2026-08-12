@@ -8,7 +8,7 @@
     <!-- Google Font -->
     <link href="https://fonts.googleapis.com/css2?family=Swanky+and+Moo+Moo&display=swap" rel="stylesheet">
 
-    <!-- A-Frame (stabile explizite Version) -->
+    <!-- A-Frame (stabile Version) -->
     <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
 
     <!-- MindAR A-Frame integration (stabile Version) -->
@@ -18,29 +18,28 @@
       html,body { height:100%; margin:0; background:#000; font-family: 'Swanky and Moo Moo', cursive; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
       a-scene { position: absolute; inset: 0; width:100%; height:100%; }
 
-      /* Minimal unobtrusive audio enable button (hidden by default) */
+      /* Very small fallback control shown only if autoplay is blocked */
       #enableSound {
         position: fixed;
         left: 50%;
         transform: translateX(-50%);
-        bottom: 6vh;
+        bottom: 5vh;
         z-index: 9999;
         display: none;
-        background: #2A376A;
+        background: rgba(42,55,106,0.95);
         color: #fff;
         border: none;
-        padding: 12px 22px;
-        font-size: 16px;
-        border-radius: 14px;
+        padding: 10px 18px;
+        font-size: 15px;
+        border-radius: 12px;
         cursor: pointer;
         -webkit-tap-highlight-color: rgba(0,0,0,0);
       }
-      #enableSound:active { transform: translateX(-50%) scale(0.98); }
       #enableSound[aria-hidden="false"] { display: inline-block; }
     </style>
 
     <script>
-      // Chromakey shader component (robust)
+      // Chromakey shader component
       AFRAME.registerComponent('chromakey', {
         schema: {
           color: { type: 'color', default: '#00FF00' },
@@ -60,7 +59,7 @@
             }
             if (!videoEl) return;
 
-            // create video texture
+            // Create video texture
             const videoTexture = new THREE.VideoTexture(videoEl);
             videoTexture.minFilter = THREE.LinearFilter;
             videoTexture.magFilter = THREE.LinearFilter;
@@ -84,9 +83,8 @@
             });
           };
 
-          if (el.getObject3D('mesh')) {
-            attach();
-          } else {
+          if (el.getObject3D('mesh')) attach();
+          else {
             el.addEventListener('loaded', attach);
             setTimeout(attach, 300);
           }
@@ -96,7 +94,7 @@
   </head>
 
   <body>
-    <!-- a-scene: MindAR with UI helpers enabled so native UI is shown if needed -->
+    <!-- MindAR scene: ui* enabled so native scanning UI appears for the user -->
     <a-scene
       mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 1; uiLoading: true; uiScanning: true; uiError: true; uiTarget: true"
       color-space="sRGB"
@@ -106,10 +104,10 @@
       embedded
     >
       <a-assets>
-        <!-- Master-Audio (looped global metronome) -->
+        <!-- Master audio (metronome/song). Will be started when page 4_5 is scanned -->
         <audio id="mainAudio" src="./assets/kompletter_song.mp3" crossorigin="anonymous" preload="auto" loop></audio>
 
-        <!-- Videos: preload explicitly none (lazy load) -->
+        <!-- All videos lazy-loaded -->
         <video id="vid_p1" src="./assets/Page_1.mp4" loop playsinline webkit-playsinline muted preload="none" crossorigin="anonymous"></video>
         <video id="vid_p4_5" src="./assets/Page_4_5.mp4" loop playsinline webkit-playsinline muted preload="none" crossorigin="anonymous"></video>
         <video id="vid_p6_7" src="./assets/Page_6_7.mp4" loop playsinline webkit-playsinline muted preload="none" crossorigin="anonymous"></video>
@@ -123,10 +121,9 @@
         <video id="vid_p22_23" src="./assets/Page_22_23.mp4" loop playsinline webkit-playsinline muted preload="none" crossorigin="anonymous"></video>
       </a-assets>
 
-      <!-- Camera -->
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <!-- Targets -->
+      <!-- Targets: each a-entity with mindar-image-target that contains a single a-video -->
       <a-entity id="target_p1" mindar-image-target="targetIndex: 0">
         <a-video src="#vid_p1" chromakey="videoSelector: #vid_p1; color: #00FF00" position="0 0 0" height="1" width="1" scale="1.16 1.16 1.16"></a-video>
       </a-entity>
@@ -170,20 +167,18 @@
       <a-entity id="target_p22_23" mindar-image-target="targetIndex: 10">
         <a-video src="#vid_p22_23" chromakey="videoSelector: #vid_p22_23; color: #00FF00" position="0 0 0" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
       </a-entity>
-
     </a-scene>
 
-    <!-- Unobtrusive fallback control shown only if autoplay is blocked -->
+    <!-- Fallback button only shown if autoplay blocked -->
     <button id="enableSound" aria-hidden="true">Ton aktivieren</button>
 
     <script>
       (function () {
-        const loopDuration = 4.0; // seconds
-
+        const loopDuration = 4.0; // seconds (video loop length)
         const mainAudio = document.getElementById('mainAudio');
         const enableSoundBtn = document.getElementById('enableSound');
 
-        // Map targets to videos
+        // Map target IDs to their video IDs
         const mappings = [
           { targetId: 'target_p1', videoId: 'vid_p1' },
           { targetId: 'target_p4_5', videoId: 'vid_p4_5' },
@@ -198,32 +193,44 @@
           { targetId: 'target_p22_23', videoId: 'vid_p22_23' }
         ];
 
-        // Ensure mainAudio config
+        // Configure mainAudio for autoplay attempts
         mainAudio.loop = true;
         mainAudio.preload = 'auto';
         mainAudio.crossOrigin = "anonymous";
-        // initially muted until we attempt to play on targetFound (prevents unexpected audio)
-        // but we will unmute when actually starting play
-        mainAudio.muted = true;
+        mainAudio.muted = true; // start muted to allow autoplay attempt where possible
 
-        // Start MindAR as soon as possible to request camera access
+        // Utility to show fallback button
+        function showEnableSound() {
+          enableSoundBtn.setAttribute('aria-hidden', 'false');
+          enableSoundBtn.style.display = 'inline-block';
+        }
+        function hideEnableSound() {
+          enableSoundBtn.setAttribute('aria-hidden', 'true');
+          enableSoundBtn.style.display = 'none';
+        }
+
+        // Try to start MindAR immediately after load to trigger camera permission
         async function startMindAROnLoad() {
           const scene = document.querySelector('a-scene');
-          if (!scene) return;
+          if (!scene) {
+            console.error('a-scene not found');
+            return;
+          }
 
-          // Find MindAR component/system
-          let mindarComp = null;
-          if (scene.components && scene.components['mindar-image']) mindarComp = scene.components['mindar-image'];
-          else if (scene.systems && scene.systems['mindar-image']) mindarComp = scene.systems['mindar-image'];
-          else if (scene.components && scene.components['mindar-image-system']) mindarComp = scene.components['mindar-image-system'];
+          // Find MindAR system robustly
+          let mindar = null;
+          if (scene.systems && scene.systems['mindar-image']) mindar = scene.systems['mindar-image'];
+          else if (scene.components && scene.components['mindar-image']) mindar = scene.components['mindar-image'];
+          else if (scene.systems && scene.systems['mindar-image-system']) mindar = scene.systems['mindar-image-system'];
 
-          if (!mindarComp || typeof mindarComp.start !== 'function') {
-            console.error('MindAR component not found or has no start() — check that mindar script loaded.');
+          if (!mindar || typeof mindar.start !== 'function') {
+            console.error('MindAR start() not found. Ensure mind-ar script loaded.');
             return;
           }
 
           try {
-            await mindarComp.start(); // this should open the camera permission prompt
+            await mindar.start(); // triggers camera permission prompt
+            console.log('MindAR started (camera prompt shown / tracking active).');
             attachTargetListeners();
           } catch (err) {
             console.error('Error starting MindAR:', err);
@@ -236,11 +243,11 @@
             const videoEl = document.getElementById(map.videoId);
             if (!targetEl || !videoEl) return;
 
-            // make sure video paused lazy
-            try { videoEl.pause(); } catch (e) {}
+            // Ensure video is paused/lazy
+            try { videoEl.pause(); } catch(e){}
 
+            // When any target is found -> sync that target's video to mainAudio beat and play
             targetEl.addEventListener('targetFound', async () => {
-              // On ANY target found: sync its video to current mainAudio beat
               try {
                 const cur = (mainAudio.currentTime && !isNaN(mainAudio.currentTime)) ? mainAudio.currentTime : 0;
                 videoEl.currentTime = cur % loopDuration;
@@ -248,48 +255,49 @@
                 console.warn('Could not set video currentTime', e);
               }
 
-              // Play the video (muted) — this should be allowed
-              const vp = videoEl.play();
-              if (vp && vp.catch) vp.catch(err => console.warn('video.play() failed', err));
+              // Play the video (muted)
+              try {
+                const p = videoEl.play();
+                if (p && p.catch) p.catch(err => console.warn('video.play() failed', err));
+              } catch (e) { /* ignore */ }
 
-              // Special behaviour: when page 4_5 (target_p4_5) is found -> start mainAudio audible
+              // If this is page 4_5, start/unmute mainAudio
               if (map.targetId === 'target_p4_5') {
                 try {
-                  // Unmute then attempt play
+                  // First attempt: unmute and play
                   mainAudio.muted = false;
                   const ap = mainAudio.play();
                   if (ap && ap.catch) {
                     ap.catch(err => {
-                      console.warn('mainAudio.play() blocked:', err);
-                      // show small enable sound button for user gesture
-                      showEnableSound();
-                      // keep audio muted for now (user likely hearing CD)
-                      mainAudio.muted = true;
+                      console.warn('Autoplay blocked for mainAudio:', err);
+                      // fallback: try to play muted (to unlock audio) then show user button to unmute
+                      (async () => {
+                        try {
+                          mainAudio.muted = true;
+                          await mainAudio.play();
+                          // show button for user to enable sound
+                          showEnableSound();
+                        } catch (e) {
+                          console.warn('Playing muted mainAudio also failed:', e);
+                          showEnableSound();
+                        }
+                      })();
                     });
                   }
                 } catch (e) {
-                  console.warn('Error while attempting to play mainAudio:', e);
+                  console.warn('Error while attempting to start mainAudio:', e);
                   showEnableSound();
                 }
               }
             });
 
             targetEl.addEventListener('targetLost', () => {
-              try { videoEl.pause(); } catch (e) {}
+              try { videoEl.pause(); } catch(e){}
             });
           });
         }
 
-        function showEnableSound() {
-          enableSoundBtn.setAttribute('aria-hidden', 'false');
-          enableSoundBtn.style.display = 'inline-block';
-        }
-
-        function hideEnableSound() {
-          enableSoundBtn.setAttribute('aria-hidden', 'true');
-          enableSoundBtn.style.display = 'none';
-        }
-
+        // Fallback user gesture to enable sound if autoplay blocked
         enableSoundBtn.addEventListener('click', async () => {
           try {
             mainAudio.muted = false;
@@ -300,24 +308,22 @@
           }
         });
 
-        // Pause videos on page hide to free memory
+        // Pause all videos when page hidden to free memory
         document.addEventListener('visibilitychange', () => {
           if (document.hidden) {
             mappings.forEach(m => {
               const v = document.getElementById(m.videoId);
-              if (v && !v.paused) try { v.pause(); } catch (e) {}
+              if (v && !v.paused) try { v.pause(); } catch(e){}
             });
           }
         });
 
-        // Expose useful debug API
+        // Debug hook
         window.__ARC = { startMindAROnLoad, mappings, loopDuration };
 
-        // Start MindAR as early as possible after load.
-        // We wait for 'load' to allow all assets to register.
+        // Start MindAR as early as possible after load. Small delay so mindar component registers.
         window.addEventListener('load', () => {
-          // Small timeout to ensure mindar component is registered in scene
-          setTimeout(startMindAROnLoad, 100);
+          setTimeout(startMindAROnLoad, 80);
         });
       })();
     </script>
