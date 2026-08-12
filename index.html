@@ -4,16 +4,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta charset="utf-8" />
     
-    <!-- Die stabilste Kombination aus A-Frame und MindAR Core-Skripten -->
+    <!-- Die stabilsten Core-Skripte (A-Frame und MindAR) -->
     <script src="https://aframe.io"></script>
     <script src="https://jsdelivr.net"></script>
-    
-    <!-- Google-Fonts Verknüpfung -->
-    <link rel="preconnect" href="https://googleapis.com">
-    <link rel="preconnect" href="https://gstatic.com" crossorigin>
-    <link href="https://googleapis.com/css2?family=Swanky+and+Moo+Moo&display=swap" rel="stylesheet">
 
-    <!-- Greenscreen-Filter Shader -->
+    <!-- Greenscreen-Filter Shader (Chroma Key) -->
     <script>
       AFRAME.registerComponent('chromakey', {
         schema: { color: {type: 'color', default: '#00FF00'} },
@@ -35,76 +30,13 @@
   </head>
   
   <body>
-     <!-- UI-Container (Liegt als Overlay ÜBER dem Kamerabild) -->
-    <div id="ui-container" style="
-      position: absolute; 
-      z-index: 999; 
-      bottom: 12%; 
-      left: 50%; 
-      transform: translateX(-50%); 
-      display: flex; 
-      flex-direction: column; 
-      gap: 20px; 
-      width: 85%; 
-      max-width: 300px;
-      box-sizing: border-box;
-    ">
-      
-      <!-- BUTTON 1: DIGITAL-MODUS -->
-      <button id="btn-digital" style="
-        width: 100%;
-        height: 75px;
-        font-family: 'Swanky and Moo Moo', cursive;
-        font-weight: 400;
-        font-style: normal;
-        font-size: 25px; 
-        color: white; 
-        border: none;
-        cursor: pointer; 
-        background: none;
-        position: relative;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      ">
-        <svg viewBox="0 0 300 75" style="position: absolute; top:0; left:0; width:100%; height:100%; z-index:-1;">
-          <path d="M 32 6 C 110 4, 190 7, 268 6 C 288 6, 294 15, 293 38 C 292 58, 287 69, 266 69 C 190 68, 110 71, 34 69 C 12 69, 7 59, 7 38 C 7 16, 12 6, 32 6 Z M 34 11 C 18 11, 13 19, 13 38 C 13 55, 17 64, 34 64 C 110 65, 190 63, 266 64 C 282 64, 287 54, 287 38 C 287 20, 282 11, 266 11 C 190 12, 110 10, 34 11 Z" fill="#FFFFFF"/>
-          <path d="M 34 11 C 110 10, 190 12, 266 11 C 282 11, 287 20, 287 38 C 287 54, 282 64, 266 64 C 190 63, 110 65, 34 64 C 17 64, 13 55, 13 38 C 13 19, 18 11, 34 11 Z" fill="#2A376A"/>
-        </svg>
-        Digital Modus
-      </button>
-
-      <!-- BUTTON 2: CD-MODUS -->
-      <button id="btn-cd" style="
-        width: 100%;
-        height: 75px;
-        font-family: 'Swanky and Moo Moo', cursive;
-        font-weight: 400;
-        font-style: normal;
-        font-size: 25px; 
-        color: white; 
-        border: none;
-        cursor: pointer; 
-        background: none;
-        position: relative;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      ">
-        <svg viewBox="0 0 300 75" style="position: absolute; top:0; left:0; width:100%; height:100%; z-index:-1;">
-          <path d="M 32 6 C 110 4, 190 7, 268 6 C 288 6, 294 15, 293 38 C 292 58, 287 69, 266 69 C 190 68, 110 71, 34 69 C 12 69, 7 59, 7 38 C 7 16, 12 6, 32 6 Z M 34 11 C 18 11, 13 19, 13 38 C 13 55, 17 64, 34 64 C 110 65, 190 63, 266 64 C 282 64, 287 54, 287 38 C 287 20, 282 11, 266 11 C 190 12, 110 10, 34 11 Z" fill="#FFFFFF"/>
-          <path d="M 34 11 C 110 10, 190 12, 266 11 C 282 11, 287 20, 287 38 C 287 54, 282 64, 266 64 C 190 63, 110 65, 34 64 C 17 64, 13 55, 13 38 C 13 19, 18 11, 34 11 Z" fill="#525C83"/>
-        </svg>
-        CD Modus
-      </button>
-    </div>
-
-    <!-- AR-Szene (Nutzt nativen autostart, um Browserblockaden zu umgehen) -->
+    <!-- Die AR-Szene startet jetzt direkt nativ mit Autostart -->
     <a-scene mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 1;" color-space="sRGB" renderer="colorManagement: true" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
       <a-assets>
-        <audio id="mainAudio" src="./assets/kompletter_song.mp3" crossorigin="anonymous" preload="none"></audio>
+        <!-- Master-Song -->
+        <audio id="mainAudio" src="./assets/kompletter_song.mp3" crossorigin="anonymous" preload="auto"></audio>
         
-        <!-- preload="none" erzwingt Lazy-Loading -->
+        <!-- Ihre stummen Videos mit erzwungenem Lazy-Loading -->
         <video id="vid_p1" src="./assets/Page_1.mp4" loop="true" crossorigin="anonymous" playsinline muted preload="none"></video>
         <video id="vid_p4_5" src="./assets/Page_4_5.mp4" loop="true" crossorigin="anonymous" playsinline muted preload="none"></video>
         <video id="vid_p6_7" src="./assets/Page_6_7.mp4" loop="true" crossorigin="anonymous" playsinline muted preload="none"></video>
@@ -121,7 +53,7 @@
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <!-- Target 0: Cover Einzelseite quadratisch -->
+      <!-- Target 0: Cover quadratisch -->
       
         <a-video src="#vid_p1" chromakey="color: #00FF00" position="0 0 0" height="1" width="1" scale="1.16 1.16 1.16"></a-video>
       
@@ -157,58 +89,47 @@
       
         <a-video src="#vid_p22_23" chromakey="color: #00FF00" position="0 0 0" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
       
-
-      <!-- Target 11: Letzte Einzelseite quadratisch -->
-      
-        <a-video src="#vid_p24" chromakey="color: #00FF00" position="0 0 0" height="1" width="1" scale="1.16 1.16 1.16"></a-video>
       
     </a-scene>
 
     <script>
       const mainAudio = document.querySelector('#mainAudio');
-      const uiContainer = document.querySelector('#ui-container');
       const loopDuration = 4.0; 
-      let arReady = false;
 
-      // Alle Tracking-Elemente und zugehörige Videos sammeln
+      // Automatische Aktivierung des globalen Audio-Taktgebers beim ersten Touch auf den Screen
+      // (Wichtig, damit iOS/Android den Sound im Hintergrund starten erlauben)
+      window.addEventListener('click', () => {
+        if(mainAudio.paused) {
+          mainAudio.play().catch(e => console.log("Audio gestartet"));
+        }
+      }, { once: true });
+
       const targets = [
         { el: document.querySelector('#target_p1'), vid: document.querySelector('#vid_p1') },
         { el: document.querySelector('#target_p4_5'), vid: document.querySelector('#vid_p4_5') },
-	{ el: document.querySelector('#target_p6_7'), vid: document.querySelector('#vid_p6_7') },
-	{ el: document.querySelector('#target_p8_9'), vid: document.querySelector('#vid_p8_9') },
-	{ el: document.querySelector('#target_p10_11'), vid: document.querySelector('#vid_p10_11') },
-	{ el: document.querySelector('#target_p12_13'), vid: document.querySelector('#vid_p12_13') },
-	{ el: document.querySelector('#target_p14_15'), vid: document.querySelector('#vid_p14_15') },
-	{ el: document.querySelector('#target_p16_17'), vid: document.querySelector('#vid_p16_17') },
-	{ el: document.querySelector('#target_p18_19'), vid: document.querySelector('#vid_p18_19') },
-	{ el: document.querySelector('#target_p20_21'), vid: document.querySelector('#vid_p20_21') },
-	{ el: document.querySelector('#target_p22_23'), vid: document.querySelector('#vid_p22_23') },
-	{ el: document.querySelector('#target_p24'), vid: document.querySelector('#vid_p24') }];
+        { el: document.querySelector('#target_p6_7'), vid: document.querySelector('#vid_p6_7') },
+        { el: document.querySelector('#target_p8_9'), vid: document.querySelector('#vid_p8_9') },
+        { el: document.querySelector('#target_p10_11'), vid: document.querySelector('#vid_p10_11') },
+        { el: document.querySelector('#target_p12_13'), vid: document.querySelector('#vid_p12_13') },
+        { el: document.querySelector('#target_p14_15'), vid: document.querySelector('#vid_p14_15') },
+        { el: document.querySelector('#target_p16_17'), vid: document.querySelector('#vid_p16_17') },
+        { el: document.querySelector('#target_p18_19'), vid: document.querySelector('#vid_p18_19') },
+        { el: document.querySelector('#target_p20_21'), vid: document.querySelector('#vid_p20_21') },
+        { el: document.querySelector('#target_p22_23'), vid: document.querySelector('#vid_p22_23') },
+      ];
 
-// Takt-Synchronisation aktivieren
-targets.forEach(target => {
-if(target.el && target.vid) {
-target.el.addEventListener("targetFound", () => {
-if (!arReady) return;
-target.vid.currentTime = mainAudio.currentTime % loopDuration;
-target.vid.play();});target.el.addEventListener("targetLost", () => {
-target.vid.pause();
-});
-}
-});
-
-// BUTTON 1: DIGITAL-MODUS (Handy spielt Musik)
-document.querySelector('#btn-digital').addEventListener('click', () => {
-mainAudio.muted = false;
-mainAudio.play().catch(e => console.log("Audio Play Error:", e));
-arReady = true;
-uiContainer.style.display = 'none';
-});
-
-// BUTTON 2: CD-MODUS (Handy stumm)
-document.querySelector('#btn-cd').addEventListener('click', () => {
-mainAudio.muted = true;
-mainAudio.play().catch(e => console.log("Audio Play Error:", e));
-arReady = true;
-uiContainer.style.display = 'none';
-});
+      targets.forEach(target => {
+        if(target.el && target.vid) {
+          target.el.addEventListener("targetFound", () => {
+            // Die Takt-Uhr (mainAudio) läuft unabhängig vom Ton im Hintergrund für den Modulo-Sync
+            target.vid.currentTime = mainAudio.currentTime % loopDuration; 
+            target.vid.play();
+          });
+          target.el.addEventListener("targetLost", () => {
+            target.vid.pause();
+          });
+        }
+      });
+    </script>
+  </body>
+</html>
