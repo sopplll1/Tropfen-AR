@@ -16,59 +16,27 @@
 
     <style>
       html,body { height:100%; margin:0; background:#000; font-family: 'Swanky and Moo Moo', cursive; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
-      /* UI-Overlay: zentriert im unteren Drittel */
-      .mode-overlay {
+      a-scene { position: absolute; inset: 0; width:100%; height:100%; }
+
+      /* Minimal unobtrusive audio enable button (hidden by default) */
+      #enableSound {
         position: fixed;
         left: 50%;
         transform: translateX(-50%);
-        bottom: 8vh;
-        width: min(92vw, 420px);
-        display: flex;
-        flex-direction: column;
-        gap: 14px;
-        align-items: center;
+        bottom: 6vh;
         z-index: 9999;
-        pointer-events: auto;
-      }
-
-      .mode-btn {
-        position: relative;
-        width: 100%;
-        height: 68px;
+        display: none;
+        background: #2A376A;
+        color: #fff;
         border: none;
-        padding: 0;
+        padding: 12px 22px;
+        font-size: 16px;
+        border-radius: 14px;
         cursor: pointer;
-        color: #ffffff;
-        font-size: 20px;
-        line-height: 68px;
-        text-align: center;
-        letter-spacing: .6px;
-        background: transparent;
         -webkit-tap-highlight-color: rgba(0,0,0,0);
       }
-
-      /* SVG fills the full button area */
-      .mode-btn svg { position:absolute; inset:0; width:100%; height:100%; display:block; pointer-events:none; }
-      .mode-btn .label {
-        position: relative;
-        z-index: 2;
-        display:block;
-        width:100%;
-        height:100%;
-        user-select:none;
-      }
-
-      /* focus styles for accessibility */
-      .mode-btn:focus { outline: 3px solid rgba(255,255,255,0.12); outline-offset: 4px; border-radius: 8px; }
-
-      /* Small accessibility helper text (optional) */
-      .hint { color: rgba(255,255,255,0.75); font-size: 12px; text-align:center; margin-top:8px; opacity:0.95; }
-
-      /* hide overlay when .hidden applied */
-      .hidden { display: none !important; }
-
-      /* Ensure a-scene covers full screen and sits behind UI */
-      a-scene { position: absolute; inset: 0; width:100%; height:100%; }
+      #enableSound:active { transform: translateX(-50%) scale(0.98); }
+      #enableSound[aria-hidden="false"] { display: inline-block; }
     </style>
 
     <script>
@@ -82,9 +50,7 @@
           const el = this.el;
           const self = this;
 
-          // helper to attach shader once mesh and video exist
           const attach = () => {
-            // resolve video element:
             let videoEl = self.data.videoSelector;
             if (!videoEl) {
               const srcAttr = el.getAttribute('src');
@@ -103,7 +69,6 @@
             const mesh = el.getObject3D('mesh');
             if (!mesh) return;
 
-            // replace material with shader material
             mesh.material = new THREE.ShaderMaterial({
               uniforms: {
                 texture1: { value: videoTexture },
@@ -119,12 +84,10 @@
             });
           };
 
-          // If mesh already available, attach; otherwise wait for loaded
           if (el.getObject3D('mesh')) {
             attach();
           } else {
             el.addEventListener('loaded', attach);
-            // some primitives create mesh later; repeat small delay as fallback
             setTimeout(attach, 300);
           }
         }
@@ -133,13 +96,13 @@
   </head>
 
   <body>
-    <!-- a-scene: MindAR with default UI elements enabled (we rely on mindar.start() to ask for camera permission) -->
+    <!-- a-scene: MindAR with UI helpers enabled so native UI is shown if needed -->
     <a-scene
       mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 1; uiLoading: true; uiScanning: true; uiError: true; uiTarget: true"
       color-space="sRGB"
       renderer="colorManagement: true; physicallyCorrectLights: false"
       vr-mode-ui="enabled: false"
-      device-orientation-permission-ui="enabled: false"    <!-- keep A-Frame DO permission UI disabled so MindAR handles camera prompting -->
+      device-orientation-permission-ui="enabled: false"
       embedded
     >
       <a-assets>
@@ -160,13 +123,12 @@
         <video id="vid_p22_23" src="./assets/Page_22_23.mp4" loop playsinline webkit-playsinline muted preload="none" crossorigin="anonymous"></video>
       </a-assets>
 
-      <!-- Camera (MindAR internally uses its own camera feed, keep look-controls off) -->
+      <!-- Camera -->
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <!-- Targets: each a-entity with mindar-image-target that contains a single a-video -->
-      <!-- Target indices 0..10 (11 targets) match your videos -->
+      <!-- Targets -->
       <a-entity id="target_p1" mindar-image-target="targetIndex: 0">
-        <a-video src="#vid_p1" chromakey="videoSelector: #vid_p1; color: #00FF00" position="0 0 0" height="1" width="1" scale="1.16 1.16 1.16" rotation="0 0 0"></a-video>
+        <a-video src="#vid_p1" chromakey="videoSelector: #vid_p1; color: #00FF00" position="0 0 0" height="1" width="1" scale="1.16 1.16 1.16"></a-video>
       </a-entity>
 
       <a-entity id="target_p4_5" mindar-image-target="targetIndex: 1">
@@ -208,43 +170,20 @@
       <a-entity id="target_p22_23" mindar-image-target="targetIndex: 10">
         <a-video src="#vid_p22_23" chromakey="videoSelector: #vid_p22_23; color: #00FF00" position="0 0 0" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
       </a-entity>
-   
+
     </a-scene>
 
-    <!-- UI Overlay -->
-    <div class="mode-overlay" id="modeOverlay" role="dialog" aria-label="AR Start Optionen">
-      <button id="digitalBtn" class="mode-btn" aria-label="Digital-Modus: Ton an">
-        <!-- SVG comic-style asymmetric rounded rect -->
-        <svg viewBox="0 0 420 68" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-          <path d="M10 8 Q8 6 12 4 L400 4 Q410 6 410 14 L410 54 Q410 62 402 64 L22 64 Q12 62 10 54 Z" fill="#2A376A"/>
-          <!-- left small white accent -->
-          <path d="M18 14 Q14 12 20 10 L82 10 Q92 12 90 20 L90 48 Q92 56 82 58 L22 58 Q14 56 18 48 Z" fill="#ffffff" fill-opacity="0.03"></path>
-        </svg>
-        <span class="label">Digital-Modus</span>
-      </button>
-
-      <button id="cdBtn" class="mode-btn" aria-label="CD-Modus: Ton stumm (CD als Audioquelle)">
-        <svg viewBox="0 0 420 68" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-          <path d="M12 4 Q18 2 30 6 L400 14 Q412 18 410 28 L410 54 Q408 62 398 64 L32 64 Q14 62 10 50 L10 24 Q10 12 12 4 Z" fill="#525C83"/>
-          <path d="M300 8 Q304 6 312 8 L384 16 Q392 20 390 28 L390 44 Q392 52 384 56 L318 56 Q306 54 300 46 Z" fill="#ffffff" fill-opacity="0.03"></path>
-        </svg>
-        <span class="label">CD-Modus</span>
-      </button>
-
-      <div class="hint">Wähle Modus → UI blendet aus → Kamera-Anfrage erscheint</div>
-    </div>
+    <!-- Unobtrusive fallback control shown only if autoplay is blocked -->
+    <button id="enableSound" aria-hidden="true">Ton aktivieren</button>
 
     <script>
       (function () {
-        const loopDuration = 4.0; // in seconds - global loop of videos
+        const loopDuration = 4.0; // seconds
 
-        // Elements
-        const overlay = document.getElementById('modeOverlay');
-        const digitalBtn = document.getElementById('digitalBtn');
-        const cdBtn = document.getElementById('cdBtn');
         const mainAudio = document.getElementById('mainAudio');
+        const enableSoundBtn = document.getElementById('enableSound');
 
-        // Map targets to videos (ids must match elements defined above)
+        // Map targets to videos
         const mappings = [
           { targetId: 'target_p1', videoId: 'vid_p1' },
           { targetId: 'target_p4_5', videoId: 'vid_p4_5' },
@@ -256,34 +195,27 @@
           { targetId: 'target_p16_17', videoId: 'vid_p16_17' },
           { targetId: 'target_p18_19', videoId: 'vid_p18_19' },
           { targetId: 'target_p20_21', videoId: 'vid_p20_21' },
-          { targetId: 'target_p22_23', videoId: 'vid_p22_23' },
+          { targetId: 'target_p22_23', videoId: 'vid_p22_23' }
         ];
 
-        // Ensure mainAudio settings
+        // Ensure mainAudio config
         mainAudio.loop = true;
         mainAudio.preload = 'auto';
         mainAudio.crossOrigin = "anonymous";
+        // initially muted until we attempt to play on targetFound (prevents unexpected audio)
+        // but we will unmute when actually starting play
+        mainAudio.muted = true;
 
-        // Generic start function: config = { muted: boolean, unmuteAfterStart: boolean (unused) }
-        const startARFlow = async (config) => {
-          // Hide overlay visually immediately
-          overlay.classList.add('hidden');
-
-          // Prepare mainAudio according to mode
-          mainAudio.muted = !!config.muted;
-          try {
-            await mainAudio.play(); // user gesture from button click should allow audio start
-          } catch (err) {
-            console.warn('mainAudio.play() rejected', err);
-            // still continue to start MindAR to let user grant camera
-          }
-
-          // Now start MindAR (will show native camera permission dialog / UI)
+        // Start MindAR as soon as possible to request camera access
+        async function startMindAROnLoad() {
           const scene = document.querySelector('a-scene');
-          // MindAR component is registered as a scene component; try both access patterns
+          if (!scene) return;
+
+          // Find MindAR component/system
           let mindarComp = null;
           if (scene.components && scene.components['mindar-image']) mindarComp = scene.components['mindar-image'];
           else if (scene.systems && scene.systems['mindar-image']) mindarComp = scene.systems['mindar-image'];
+          else if (scene.components && scene.components['mindar-image-system']) mindarComp = scene.components['mindar-image-system'];
 
           if (!mindarComp || typeof mindarComp.start !== 'function') {
             console.error('MindAR component not found or has no start() — check that mindar script loaded.');
@@ -291,64 +223,86 @@
           }
 
           try {
-            await mindarComp.start(); // triggers camera permission UI and starts tracking
-            // initialize target listeners AFTER mindar started
+            await mindarComp.start(); // this should open the camera permission prompt
             attachTargetListeners();
-          } catch (e) {
-            console.error('Error starting MindAR:', e);
+          } catch (err) {
+            console.error('Error starting MindAR:', err);
           }
-        };
+        }
 
-        // Attach listeners for each target -> video sync/pause
         function attachTargetListeners() {
           mappings.forEach(map => {
             const targetEl = document.getElementById(map.targetId);
             const videoEl = document.getElementById(map.videoId);
             if (!targetEl || !videoEl) return;
 
-            // Ensure video paused by default (lazy loading)
-            try { videoEl.pause(); } catch (e) { /* ignore */ }
+            // make sure video paused lazy
+            try { videoEl.pause(); } catch (e) {}
 
-            // targetFound / targetLost events are emitted by mindar-image-target
-            targetEl.addEventListener('targetFound', () => {
+            targetEl.addEventListener('targetFound', async () => {
+              // On ANY target found: sync its video to current mainAudio beat
               try {
-                // set video sync to global beat
-                // If mainAudio is not playing (should be), still set based on its currentTime property
                 const cur = (mainAudio.currentTime && !isNaN(mainAudio.currentTime)) ? mainAudio.currentTime : 0;
                 videoEl.currentTime = cur % loopDuration;
               } catch (e) {
                 console.warn('Could not set video currentTime', e);
               }
-              // Play the video (triggers network load if preload=none)
-              const p = videoEl.play();
-              if (p && p.catch) p.catch(err => {
-                // some devices restrict unmuted video playback; since videos are muted we expect success
-                console.warn('video.play() failed', err);
-              });
+
+              // Play the video (muted) — this should be allowed
+              const vp = videoEl.play();
+              if (vp && vp.catch) vp.catch(err => console.warn('video.play() failed', err));
+
+              // Special behaviour: when page 4_5 (target_p4_5) is found -> start mainAudio audible
+              if (map.targetId === 'target_p4_5') {
+                try {
+                  // Unmute then attempt play
+                  mainAudio.muted = false;
+                  const ap = mainAudio.play();
+                  if (ap && ap.catch) {
+                    ap.catch(err => {
+                      console.warn('mainAudio.play() blocked:', err);
+                      // show small enable sound button for user gesture
+                      showEnableSound();
+                      // keep audio muted for now (user likely hearing CD)
+                      mainAudio.muted = true;
+                    });
+                  }
+                } catch (e) {
+                  console.warn('Error while attempting to play mainAudio:', e);
+                  showEnableSound();
+                }
+              }
             });
 
             targetEl.addEventListener('targetLost', () => {
-              try { videoEl.pause(); } catch (e) { /* ignore */ }
+              try { videoEl.pause(); } catch (e) {}
             });
           });
         }
 
-        // Button handlers
-        digitalBtn.addEventListener('click', async () => {
-          // Digital-Modus: play audio audible
-          startARFlow({ muted: false });
+        function showEnableSound() {
+          enableSoundBtn.setAttribute('aria-hidden', 'false');
+          enableSoundBtn.style.display = 'inline-block';
+        }
+
+        function hideEnableSound() {
+          enableSoundBtn.setAttribute('aria-hidden', 'true');
+          enableSoundBtn.style.display = 'none';
+        }
+
+        enableSoundBtn.addEventListener('click', async () => {
+          try {
+            mainAudio.muted = false;
+            await mainAudio.play();
+            hideEnableSound();
+          } catch (e) {
+            console.warn('User-initiated mainAudio.play() failed', e);
+          }
         });
 
-        cdBtn.addEventListener('click', async () => {
-          // CD-Modus: audio muted (user listens to CD), but audio plays silently as metronome
-          startARFlow({ muted: true });
-        });
-
-        // Helpful fallback: if user touches screen outside buttons, do nothing (we require explicit choice)
-        // Defensive: Stop any videos on page visibilitychange (pause) to avoid background RAM issues
+        // Pause videos on page hide to free memory
         document.addEventListener('visibilitychange', () => {
           if (document.hidden) {
-            // pause all videos
             mappings.forEach(m => {
               const v = document.getElementById(m.videoId);
               if (v && !v.paused) try { v.pause(); } catch (e) {}
@@ -356,12 +310,16 @@
           }
         });
 
-        // Expose for debugging (optional)
-        window.__ARC = {
-          startARFlow, mappings, loopDuration
-        };
+        // Expose useful debug API
+        window.__ARC = { startMindAROnLoad, mappings, loopDuration };
+
+        // Start MindAR as early as possible after load.
+        // We wait for 'load' to allow all assets to register.
+        window.addEventListener('load', () => {
+          // Small timeout to ensure mindar component is registered in scene
+          setTimeout(startMindAROnLoad, 100);
+        });
       })();
     </script>
-
   </body>
 </html>
