@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    
+    <!-- Korrigierte und stabile MindAR & A-Frame Core-Skripte -->
+    <script src="https://aframe.io"></script>
+    <script src="https://jsdelivr.net"></script>
+    
+    <!-- Google-Fonts Verknüpfung für Ihre Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Swanky+and+Moo+Moo&display=swap" rel="stylesheet">
+
+    <!-- Greenscreen-Filter Shader -->
+    <script>
+      AFRAME.registerComponent('chromakey', {
+        schema: { color: {type: 'color', default: '#00FF00'} },
+        init: function () {
+          let mesh = this.el.getObject3D('mesh');
+          if (!mesh) return;
+          mesh.material = new THREE.ShaderMaterial({
+            uniforms: {
+              texture1: { value: new THREE.VideoTexture(this.el.getContext('video')) },
+              color: { value: new THREE.Color(this.data.color) }
+            },
+            vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+            fragmentShader: `varying vec2 vUv; uniforms sampler2D texture1; uniforms vec3 color; void main() { vec4 tColor = texture2D(texture1, vUv); float difference = distance(tColor.rgb, color); if (difference < 0.45) { discard; } else { gl_FragColor = tColor; } }`,
+            transparent: true
+          });
+        }
+      });
+    </script>
+  </head>
+  
+  <body>
+     <!-- UI-Container zentriert im Daubenbereich für Smartphones -->
+    <div id="ui-container" style="
+      position: absolute; 
+      z-index: 999; 
+      bottom: 12%; 
+      left: 50%; 
+      transform: translateX(-50%); 
+      display: flex; 
+      flex-direction: column; 
+      gap: 20px; 
+      width: 85%; 
+      max-width: 300px;
+      box-sizing: border-box;
+    ">
+      
+      <!-- BUTTON 1: DIGITAL-MODUS -->
+      <button id="btn-digital" style="
+        width: 100%;
+        height: 75px;
+        font-family: 'Swanky and Moo Moo', cursive;
+        font-weight: 400;
+        font-style: normal;
+        font-size: 25px; 
+        color: white; 
+        border: none;
+        cursor: pointer; 
+        background: none;
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      ">
+        <svg viewBox="0 0 300 75" style="position: absolute; top:0; left:0; width:100%; height:100%; z-index:-1;">
+          <path d="M 32 6 C 110 4, 190 7, 268 6 C 288 6, 294 15, 293 38 C 292 58, 287 69, 266 69 C 190 68, 110 71, 34 69 C 12 69, 7 59, 7 38 C 7 16, 12 6, 32 6 Z M 34 11 C 18 11, 13 19, 13 38 C 13 55, 17 64, 34 64 C 110 65, 190 63, 266 64 C 282 64, 287 54, 287 38 C 287 20, 282 11, 266 11 C 190 12, 110 10, 34 11 Z" fill="#FFFFFF"/>
+          <path d="M 34 11 C 110 10, 190 12, 266 11 C 282 11, 287 20, 287 38 C 287 54, 282 64, 266 64 C 190 63, 110 65, 34 64 C 17 64, 13 55, 13 38 C 13 19, 18 11, 34 11 Z" fill="#2A376A"/>
+        </svg>
+        Digital Modus
+      </button>
+
+      <!-- BUTTON 2: CD-MODUS -->
+      <button id="btn-cd" style="
+        width: 100%;
+        height: 75px;
+        font-family: 'Swanky and Moo Moo', cursive;
+        font-weight: 400;
+        font-style: normal;
+        font-size: 25px; 
+        color: white; 
+        border: none;
+        cursor: pointer; 
+        background: none;
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      ">
+        <svg viewBox="0 0 300 75" style="position: absolute; top:0; left:0; width:100%; height:100%; z-index:-1;">
+          <path d="M 32 6 C 110 4, 190 7, 268 6 C 288 6, 294 15, 293 38 C 292 58, 287 69, 266 69 C 190 68, 110 71, 34 69 C 12 69, 7 59, 7 38 C 7 16, 12 6, 32 6 Z M 34 11 C 18 11, 13 19, 13 38 C 13 55, 17 64, 34 64 C 110 65, 190 63, 266 64 C 282 64, 287 54, 287 38 C 287 20, 282 11, 266 11 C 190 12, 110 10, 34 11 Z" fill="#FFFFFF"/>
+          <path d="M 34 11 C 110 10, 190 12, 266 11 C 282 11, 287 20, 287 38 C 287 54, 282 64, 266 64 C 190 63, 110 65, 34 64 C 17 64, 13 55, 13 38 C 13 19, 18 11, 34 11 Z" fill="#525C83"/>
+        </svg>
+        CD Modus
+      </button>
+
+    </div>
+
+    <!-- AR-Szene -->
+    <a-scene mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 1;" color-space="sRGB" renderer="colorManagement: true" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
+      <a-assets>
+        <!-- Master-Song -->
+        <audio id="mainAudio" src="./assets/kompletter_song.mp3" crossorigin="anonymous"></audio>
+        
+        <!-- Registrierung aller 12 Animationsvideos laut Ihren Dateinamen (Pfad: ./assets/...) -->
+        <video id="vid_p1" src="./assets/Page_1.mp4" loop="true" crossorigin="anonymous" playsinline muted></video>
+        <video id="vid_p4_5" src="./assets/Page_4_5.mp4" loop="true" crossorigin="anonymous" playsinline muted></video>
+        <video id="vid_p6_7" src="./assets/Page_6_7.mp4" loop="true" crossorigin="anonymous" playsinline muted></video>
+        <video id="vid_p8_9" src="./assets/Page_8_9.mp4" loop="true" crossorigin="anonymous" playsinline muted></video>
+        <video id="vid_p10_11" src="./assets/Page_10_11.mp4" loop="true" crossorigin="anonymous" playsinline muted></video>
+        <video id="vid_p12_13" src="./assets/Page_12_13.mp4" loop="true" crossorigin="anonymous" playsinline muted></video>
+        <video id="vid_p14_15" src="./assets/Page_14_15.mp4" loop="true" crossorigin="anonymous" playsinline muted></video>
+        <video id="vid_p16_17" src="./assets/Page_16_17.mp4" loop="true" crossorigin="anonymous" playsinline muted></video>
+        <video id="vid_p18_19" src="./assets/Page_18_19.mp4" loop="true" crossorigin="anonymous" playsinline muted></video>
+        <video id="vid_p20_21" src="./assets/Page_20_21.mp4" loop="true" crossorigin="anonymous" playsinline muted></video>
+        <video id="vid_p22_23" src="./assets/Page_22_23.mp4" loop="true" crossorigin="anonymous" playsinline muted></video>
+      </a-assets>
+
+      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+      <!-- SEITE 1 (Einzelseite quadratisch - targetIndex 0 im Compiler) -->
+      
+        <a-video src="#vid_p1" chromakey="color: #00FF00" position="0 0 0" height="1" width="1" scale="1.16 1.16 1.16"></a-video>
+      
+
+      <!-- DOPPELSEITEN (Format 2:1 basierend auf 1920x960px mit Ihrem Überlauf) -->
+      
+        <a-video src="#vid_p4_5" chromakey="color: #00FF00" position="0 0 0" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
+      
+
+      
+        <a-video src="#vid_p6_7" chromakey="color: #00FF00" position="0 0 0" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
+      
+
+      
+        <a-video src="#vid_p8_9" chromakey="color: #00FF00" position="0 0 0" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
+      
+
+      
+        <a-video src="#vid_p10_11" chromakey="color: #00FF00" position="0 0 0" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
+      
+
+      
+        <a-video src="#vid_p12_13" chromakey="color: #00FF00" position="0 0 0" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
+      
+
+      
+        <a-video src="#vid_p14_15" chromakey="color: #00FF00" position="0 0 0" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
+      
+
+      
+        <a-video src="#vid_p16_17" chromakey="color: #00FF00" position="0 0 0" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
+      
+
+      
+        <a-video src="#vid_p18_19" chromakey="color: #00FF00" position="0 0 0" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
+      
+
+      
+        <a-video src="#vid_p20_21" chromakey="color: #00FF00" position="0 0 0" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
+      
+
+      
+        <a-video src="#vid_p22_23" chromakey="color: #00FF00" position="0 0 0" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
+      
+
+      
+    </a-scene>
+
+    <script>
+      const mainAudio = document.querySelector('#mainAudio');
+      const uiContainer = document.querySelector('#ui-container');
+      const loopDuration = 4.0; // Takt-Loop-Länge Ihrer Animationen in Sekunden
+      let arReady = false;
+
+      // Alle Tracking-Elemente und zugehörige Videos sammeln
+      const targets = [
+        { el: document.querySelector('#target_p1'), vid: document.querySelector('#vid_p1') },
+        { el: document.querySelector('#target_p4_5'), vid: document.querySelector('#vid_p4_5') },
