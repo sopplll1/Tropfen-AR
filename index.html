@@ -2,15 +2,16 @@
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta charset="utf-8" />
     
-    <!-- Korrigierte und stabile MindAR & A-Frame Core-Skripte -->
+    <!-- Hochstabile, offizielle CDN-Links für A-Frame und MindAR -->
     <script src="https://aframe.io"></script>
     <script src="https://jsdelivr.net"></script>
     
-    <!-- Google-Fonts Verknüpfung für Ihre Font -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Swanky+and+Moo+Moo&display=swap" rel="stylesheet">
+    <!-- Google-Fonts Verknüpfung -->
+    <link rel="preconnect" href="https://googleapis.com">
+    <link rel="preconnect" href="https://gstatic.com" crossorigin>
+    <link href="https://googleapis.com/css2?family=Swanky+and+Moo+Moo&display=swap" rel="stylesheet">
 
     <!-- Greenscreen-Filter Shader -->
     <script>
@@ -34,7 +35,7 @@
   </head>
   
   <body>
-     <!-- UI-Container zentriert im Daubenbereich für Smartphones -->
+     <!-- UI-Container im Daumenbereich für Smartphones -->
     <div id="ui-container" style="
       position: absolute; 
       z-index: 999; 
@@ -96,87 +97,79 @@
         </svg>
         CD Modus
       </button>
-
     </div>
 
-    <!-- AR-Szene -->
-    <a-scene mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 1;" color-space="sRGB" renderer="colorManagement: true" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
+    <!-- AR-Szene (Automatisch unsichtbar, bis ein Modus gewählt wird) -->
+    <a-scene id="ar-scene" style="display: none;" mindar-image="imageTargetSrc: ./targets.mind; autoStart: false; maxTrack: 1;" color-space="sRGB" renderer="colorManagement: true" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
       <a-assets>
-        <!-- Master-Song -->
-        <audio id="mainAudio" src="./assets/kompletter_song.mp3" crossorigin="anonymous"></audio>
+        <audio id="mainAudio" src="./assets/kompletter_song.mp3" crossorigin="anonymous" preload="auto"></audio>
         
-        <!-- Registrierung aller 12 Animationsvideos laut Ihren Dateinamen (Pfad: ./assets/...) -->
-        <video id="vid_p1" src="./assets/Page_1.mp4" loop="true" crossorigin="anonymous" playsinline muted></video>
-        <video id="vid_p4_5" src="./assets/Page_4_5.mp4" loop="true" crossorigin="anonymous" playsinline muted></video>
-        <video id="vid_p6_7" src="./assets/Page_6_7.mp4" loop="true" crossorigin="anonymous" playsinline muted></video>
-        <video id="vid_p8_9" src="./assets/Page_8_9.mp4" loop="true" crossorigin="anonymous" playsinline muted></video>
-        <video id="vid_p10_11" src="./assets/Page_10_11.mp4" loop="true" crossorigin="anonymous" playsinline muted></video>
-        <video id="vid_p12_13" src="./assets/Page_12_13.mp4" loop="true" crossorigin="anonymous" playsinline muted></video>
-        <video id="vid_p14_15" src="./assets/Page_14_15.mp4" loop="true" crossorigin="anonymous" playsinline muted></video>
-        <video id="vid_p16_17" src="./assets/Page_16_17.mp4" loop="true" crossorigin="anonymous" playsinline muted></video>
-        <video id="vid_p18_19" src="./assets/Page_18_19.mp4" loop="true" crossorigin="anonymous" playsinline muted></video>
-        <video id="vid_p20_21" src="./assets/Page_20_21.mp4" loop="true" crossorigin="anonymous" playsinline muted></video>
-        <video id="vid_p22_23" src="./assets/Page_22_23.mp4" loop="true" crossorigin="anonymous" playsinline muted></video>
+        <!-- Zwingendes preload="none" verhindert das endlose Laden im Hintergrund -->
+        <video id="vid_p1" src="./assets/Page_1.mp4" loop="true" crossorigin="anonymous" playsinline muted preload="none"></video>
+        <video id="vid_p4_5" src="./assets/Page_4_5.mp4" loop="true" crossorigin="anonymous" playsinline muted preload="none"></video>
+        <video id="vid_p6_7" src="./assets/Page_6_7.mp4" loop="true" crossorigin="anonymous" playsinline muted preload="none"></video>
+        <video id="vid_p8_9" src="./assets/Page_8_9.mp4" loop="true" crossorigin="anonymous" playsinline muted preload="none"></video>
+        <video id="vid_p10_11" src="./assets/Page_10_11.mp4" loop="true" crossorigin="anonymous" playsinline muted preload="none"></video>
+        <video id="vid_p12_13" src="./assets/Page_12_13.mp4" loop="true" crossorigin="anonymous" playsinline muted preload="none"></video>
+        <video id="vid_p14_15" src="./assets/Page_14_15.mp4" loop="true" crossorigin="anonymous" playsinline muted preload="none"></video>
+        <video id="vid_p16_17" src="./assets/Page_16_17.mp4" loop="true" crossorigin="anonymous" playsinline muted preload="none"></video>
+        <video id="vid_p18_19" src="./assets/Page_18_19.mp4" loop="true" crossorigin="anonymous" playsinline muted preload="none"></video>
+        <video id="vid_p20_21" src="./assets/Page_20_21.mp4" loop="true" crossorigin="anonymous" playsinline muted preload="none"></video>
+        <video id="vid_p22_23" src="./assets/Page_22_23.mp4" loop="true" crossorigin="anonymous" playsinline muted preload="none"></video>
+        <video id="vid_p24" src="./assets/Page_24.mp4" loop="true" crossorigin="anonymous" playsinline muted preload="none"></video>
       </a-assets>
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <!-- SEITE 1 (Einzelseite quadratisch - targetIndex 0 im Compiler) -->
+      <!-- Target 0: Cover Einzelseite quadratisch -->
       
         <a-video src="#vid_p1" chromakey="color: #00FF00" position="0 0 0" height="1" width="1" scale="1.16 1.16 1.16"></a-video>
       
 
-      <!-- DOPPELSEITEN (Format 2:1 basierend auf 1920x960px mit Ihrem Überlauf) -->
+      <!-- Targets 1-10: Doppelseiten 2:1 Format -->
       
         <a-video src="#vid_p4_5" chromakey="color: #00FF00" position="0 0 0" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
       
-
       
         <a-video src="#vid_p6_7" chromakey="color: #00FF00" position="0 0 0" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
       
-
       
         <a-video src="#vid_p8_9" chromakey="color: #00FF00" position="0 0 0" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
       
-
       
         <a-video src="#vid_p10_11" chromakey="color: #00FF00" position="0 0 0" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
       
-
       
         <a-video src="#vid_p12_13" chromakey="color: #00FF00" position="0 0 0" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
       
-
       
         <a-video src="#vid_p14_15" chromakey="color: #00FF00" position="0 0 0" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
       
-
       
         <a-video src="#vid_p16_17" chromakey="color: #00FF00" position="0 0 0" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
       
-
       
         <a-video src="#vid_p18_19" chromakey="color: #00FF00" position="0 0 0" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
       
-
       
         <a-video src="#vid_p20_21" chromakey="color: #00FF00" position="0 0 0" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
       
-
       
         <a-video src="#vid_p22_23" chromakey="color: #00FF00" position="0 0 0" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
       
 
+      <!-- Target 11: Letzte Einzelseite quadratisch -->
+      
+        <a-video src="#vid_p24" chromakey="color: #00FF00" position="0 0 0" height="1" width="1" scale="1.16 1.16 1.16"></a-video>
       
     </a-scene>
 
     <script>
       const mainAudio = document.querySelector('#mainAudio');
       const uiContainer = document.querySelector('#ui-container');
-      const loopDuration = 4.0; // Takt-Loop-Länge Ihrer Animationen in Sekunden
+      const sceneEl = document.querySelector('#ar-scene');
+      const loopDuration = 4.0; 
       let arReady = false;
 
-      // Alle Tracking-Elemente und zugehörige Videos sammeln
       const targets = [
         { el: document.querySelector('#target_p1'), vid: document.querySelector('#vid_p1') },
-        { el: document.querySelector('#target_p4_5'), vid: document.querySelector('#vid_p4_5') },
