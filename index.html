@@ -4,7 +4,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta charset="utf-8" />
     
-    <!-- Hochstabile, offizielle CDN-Links für A-Frame und MindAR -->
+    <!-- Die stabilste Kombination aus A-Frame und MindAR Core-Skripten -->
     <script src="https://aframe.io"></script>
     <script src="https://jsdelivr.net"></script>
     
@@ -35,7 +35,7 @@
   </head>
   
   <body>
-     <!-- UI-Container im Daumenbereich für Smartphones -->
+     <!-- UI-Container (Liegt als Overlay ÜBER dem Kamerabild) -->
     <div id="ui-container" style="
       position: absolute; 
       z-index: 999; 
@@ -99,12 +99,12 @@
       </button>
     </div>
 
-    <!-- AR-Szene (Automatisch unsichtbar, bis ein Modus gewählt wird) -->
-    <a-scene id="ar-scene" style="display: none;" mindar-image="imageTargetSrc: ./targets.mind; autoStart: false; maxTrack: 1;" color-space="sRGB" renderer="colorManagement: true" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
+    <!-- AR-Szene (Nutzt nativen autostart, um Browserblockaden zu umgehen) -->
+    <a-scene mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 1;" color-space="sRGB" renderer="colorManagement: true" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
       <a-assets>
-        <audio id="mainAudio" src="./assets/kompletter_song.mp3" crossorigin="anonymous" preload="auto"></audio>
+        <audio id="mainAudio" src="./assets/kompletter_song.mp3" crossorigin="anonymous" preload="none"></audio>
         
-        <!-- Zwingendes preload="none" verhindert das endlose Laden im Hintergrund -->
+        <!-- preload="none" erzwingt Lazy-Loading -->
         <video id="vid_p1" src="./assets/Page_1.mp4" loop="true" crossorigin="anonymous" playsinline muted preload="none"></video>
         <video id="vid_p4_5" src="./assets/Page_4_5.mp4" loop="true" crossorigin="anonymous" playsinline muted preload="none"></video>
         <video id="vid_p6_7" src="./assets/Page_6_7.mp4" loop="true" crossorigin="anonymous" playsinline muted preload="none"></video>
@@ -167,9 +167,48 @@
     <script>
       const mainAudio = document.querySelector('#mainAudio');
       const uiContainer = document.querySelector('#ui-container');
-      const sceneEl = document.querySelector('#ar-scene');
       const loopDuration = 4.0; 
       let arReady = false;
 
+      // Alle Tracking-Elemente und zugehörige Videos sammeln
       const targets = [
         { el: document.querySelector('#target_p1'), vid: document.querySelector('#vid_p1') },
+        { el: document.querySelector('#target_p4_5'), vid: document.querySelector('#vid_p4_5') },
+	{ el: document.querySelector('#target_p6_7'), vid: document.querySelector('#vid_p6_7') },
+	{ el: document.querySelector('#target_p8_9'), vid: document.querySelector('#vid_p8_9') },
+	{ el: document.querySelector('#target_p10_11'), vid: document.querySelector('#vid_p10_11') },
+	{ el: document.querySelector('#target_p12_13'), vid: document.querySelector('#vid_p12_13') },
+	{ el: document.querySelector('#target_p14_15'), vid: document.querySelector('#vid_p14_15') },
+	{ el: document.querySelector('#target_p16_17'), vid: document.querySelector('#vid_p16_17') },
+	{ el: document.querySelector('#target_p18_19'), vid: document.querySelector('#vid_p18_19') },
+	{ el: document.querySelector('#target_p20_21'), vid: document.querySelector('#vid_p20_21') },
+	{ el: document.querySelector('#target_p22_23'), vid: document.querySelector('#vid_p22_23') },
+	{ el: document.querySelector('#target_p24'), vid: document.querySelector('#vid_p24') }];
+
+// Takt-Synchronisation aktivieren
+targets.forEach(target => {
+if(target.el && target.vid) {
+target.el.addEventListener("targetFound", () => {
+if (!arReady) return;
+target.vid.currentTime = mainAudio.currentTime % loopDuration;
+target.vid.play();});target.el.addEventListener("targetLost", () => {
+target.vid.pause();
+});
+}
+});
+
+// BUTTON 1: DIGITAL-MODUS (Handy spielt Musik)
+document.querySelector('#btn-digital').addEventListener('click', () => {
+mainAudio.muted = false;
+mainAudio.play().catch(e => console.log("Audio Play Error:", e));
+arReady = true;
+uiContainer.style.display = 'none';
+});
+
+// BUTTON 2: CD-MODUS (Handy stumm)
+document.querySelector('#btn-cd').addEventListener('click', () => {
+mainAudio.muted = true;
+mainAudio.play().catch(e => console.log("Audio Play Error:", e));
+arReady = true;
+uiContainer.style.display = 'none';
+});
