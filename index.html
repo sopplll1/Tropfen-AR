@@ -20,18 +20,16 @@
       a-scene { position: absolute; inset: 0; width:100%; height:100%; }
 
       /* Loader / fullscreen progress */
-      #arLoader {
-        position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 10000; background: rgba(0,0,0,0.85); color:#fff; flex-direction:column;
-      }
+      #arLoader { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 10000; background: rgba(0,0,0,0.85); color:#fff; flex-direction:column; }
       #arLoader.hidden { display: none; }
       #arLoader .box { padding: 16px 18px; border-radius: 12px; text-align:center; }
       #arLoader .progress { width: 320px; height: 10px; background: rgba(255,255,255,0.12); border-radius:6px; overflow:hidden; margin-top:12px; }
       #arLoader .progress > i { display:block; height:100%; background: linear-gradient(90deg,#4ade80,#06b6d4); width:0%; }
 
-      /* Center play overlay */
-      #playOverlay { position: fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:11000; pointer-events:none; }
+      /* Center play overlay (larger button) */
+      #playOverlay { position: fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:11000; pointer-events:auto; }
       #playOverlay.hidden { display:none; }
-      #playOverlay button { pointer-events:auto; background: rgba(255,255,255,0.95); border:none; padding:18px 28px; font-size:20px; border-radius:999px; cursor:pointer; }
+      #playOverlay button { pointer-events:auto; background: rgba(255,255,255,0.95); border:none; padding:26px 40px; font-size:26px; border-radius:999px; cursor:pointer; box-shadow: 0 8px 24px rgba(0,0,0,0.45); }
 
       /* Fallback control */
       #enableSound { position: fixed; left: 50%; transform: translateX(-50%); bottom: 5vh; z-index: 9999; display: none; background: rgba(42,55,106,0.95); color: #fff; border: none; padding: 10px 18px; font-size: 15px; border-radius: 12px; cursor: pointer; -webkit-tap-highlight-color: rgba(0,0,0,0); }
@@ -39,14 +37,135 @@
 
       a-scene { z-index: 1; }
       a-scene canvas { position: absolute; left: 0; top: 0; width: 100% !important; height: 100% !important; z-index: 1 !important; }
+
+      /* Best-effort: ensure camera preview video centers and covers the screen */
+      video[playsinline], video[webkit-playsinline] {
+        position: fixed !important;
+        left: 50% !important;
+        top: 50% !important;
+        width: auto !important;
+        height: 100% !important;
+        transform: translate(-50%, -50%) !important;
+        object-fit: cover !important;
+        object-position: center center !important;
+        margin: 0 !important;
+        z-index: 0 !important;
+      }
+
+      /* For some devices the camera is rendered as a mirrored element — ensure it fills */
+      .mindar-video { position: fixed !important; left: 50% !important; top: 50% !important; transform: translate(-50%,-50%) !important; width: auto !important; height: 100% !important; object-fit: cover !important; object-position: center center !important; }
+
     </style>
+
+    <script>
+      // Chromakey shader component (YCbCr + 3x3 blur + despill) - tuned defaults
+      (function(){
+        if (!window.AFRAME) { console.warn('AFRAME not found when defining chromakey component'); return; }
+        try {
+          AFRAME.registerComponent('chromakey', {
+            schema: {
+              color: { type: 'color', default: '#00FF00' },
+              threshold: { type: 'number', default: 0.10 },
+              softness: { type: 'number', default: 0.04 },
+              spillSuppress: { type: 'number', default: 0.92 },
+              videoSelector: { type: 'selector', default: null }
+            },
+            init: function(){
+              const el = this.el; const data = this.data; const self = this;
+              const attach = () => {
+                let videoEl = data.videoSelector;
+                if (!videoEl) {
+                  const srcAttr = el.getAttribute('src');
+                  if (srcAttr && typeof srcAttr === 'string' && srcAttr.startsWith('#')) videoEl = document.querySelector(srcAttr);
+                }
+                if (!videoEl) return;
+                if (!window.THREE) { setTimeout(attach,200); return; }
+
+                const videoTexture = new THREE.VideoTexture(videoEl);
+                videoTexture.minFilter = THREE.LinearFilter; videoTexture.magFilter = THREE.LinearFilter; videoTexture.format = THREE.RGBFormat;
+
+                const mesh = el.getObject3D('mesh'); if (!mesh) { setTimeout(attach,200); return; }
+
+                const fragment = `precision mediump float; varying vec2 vUv; uniform sampler2D texture1; uniform vec3 keyColor; uniform float threshold; uniform float softness; uniform float spillSuppress; uniform float texel;
+
+                vec3 rgb2ycbcr(vec3 c) {
+                  float y  =  0.299*c.r + 0.587*c.g + 0.114*c.b;
+                  float cb = -0.168736*c.r - 0.331264*c.g + 0.5*c.b + 0.5;
+                  float cr =  0.5*c.r - 0.418688*c.g - 0.081312*c.b + 0.5;
+                  return vec3(y, cb, cr);
+                }
+
+                void main(){
+                  vec4 tex = texture2D(texture1, vUv);
+                  vec3 keyYC = rgb2ycbcr(keyColor);
+                  vec3 pixYC = rgb2ycbcr(tex.rgb);
+                  float d = distance(pixYC.yz, keyYC.yz);
+                  float base = smoothstep(threshold - softness, threshold + softness, d);
+
+                  // 3x3 box blur on alpha
+                  float sum = 0.0;
+                  for(int x=-1; x<=1; x++){
+                    for(int y=-1; y<=1; y++){
+                      vec2 off = vec2(float(x), float(y)) * vec2(texel, texel);
+                      vec3 sYC = rgb2ycbcr(texture2D(texture1, vUv + off).rgb);
+                      float sd = distance(sYC.yz, keyYC.yz);
+                      float a = smoothstep(threshold - softness, threshold + softness, sd);
+                      sum += a;
+                    }
+                  }
+                  float alpha = sum / 9.0;
+
+                  // despill: reduce green channel in keyed areas
+                  float avg = (tex.r + tex.g + tex.b) * 0.333333;
+                  float suppressedG = mix(tex.g, avg, spillSuppress * alpha);
+                  vec3 finalColor = vec3(tex.r, suppressedG, tex.b);
+                  // output with inverted alpha (we want transparent where green was)
+                  gl_FragColor = vec4(finalColor, 1.0 - alpha);
+                }`;
+
+                mesh.material = new THREE.ShaderMaterial({
+                  uniforms: {
+                    texture1: { value: videoTexture },
+                    keyColor: { value: new THREE.Color(data.color) },
+                    threshold: { value: data.threshold },
+                    softness: { value: data.softness },
+                    spillSuppress: { value: data.spillSuppress },
+                    texel: { value: 1.0 / 512.0 }
+                  },
+                  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+                  fragmentShader: fragment,
+                  transparent: true,
+                  depthTest: false,
+                  side: THREE.DoubleSide
+                });
+
+                mesh.renderOrder = 999;
+                if (mesh.material && mesh.material.uniforms) mesh.material.uniforms.texture1.value = videoTexture;
+
+                // update texel based on metadata
+                if (videoEl.readyState >= 1) {
+                  const size = Math.max(videoEl.videoWidth || 512, videoEl.videoHeight || 512);
+                  mesh.material.uniforms.texel.value = 1.0 / Math.max(size, 256);
+                } else {
+                  videoEl.addEventListener('loadedmetadata', () => {
+                    try { const size = Math.max(videoEl.videoWidth || 512, videoEl.videoHeight || 512); mesh.material.uniforms.texel.value = 1.0 / Math.max(size, 256); } catch(e){}
+                  }, { once:true });
+                }
+
+              };
+              try { if (el.getObject3D && el.getObject3D('mesh')) attach(); else { el.addEventListener('loaded', attach); setTimeout(attach,300); } } catch(e){ console.error('chromakey init error', e); }
+            }
+          });
+        } catch(e){ console.error('Failed to register chromakey component', e); }
+      })();
+    </script>
   </head>
 
   <body>
     <!-- Loader shown until all videos preloaded -->
     <div id="arLoader"><div class="box"><div id="loaderText">Lade AR-Inhalte…</div><div class="progress"><i id="loaderBar"></i></div></div></div>
 
-    <!-- Play overlay (shown when page 4_5 is found and videosReady true) -->
+    <!-- Play overlay -->
     <div id="playOverlay" class="hidden"><button id="playButton">Play</button></div>
 
     <!-- Fallback button -->
@@ -60,7 +179,7 @@
         <!-- Videos: preload handled by script (we keep preload attributes minimal here) -->
         <video id="vid_p1" src="./assets/Page_1.mp4" loop playsinline webkit-playsinline muted crossorigin="anonymous"></video>
         <video id="vid_p4_5" src="./assets/Page_4_5.mp4" loop playsinline webkit-playsinline muted crossorigin="anonymous"></video>
-        <video id="vid_p6_7" src="./assets/Page_6_7.mp4" loop playsinline webkit-playsinline muted crossorigin="anonymous"></video>
+        <video id="vid_p6_7".src="./assets/Page_6_7.mp4" loop playsinline webkit-playsinline muted crossorigin="anonymous"></video>
         <video id="vid_p8_9" src="./assets/Page_8_9.mp4" loop playsinline webkit-playsinline muted crossorigin="anonymous"></video>
         <video id="vid_p10_11" src="./assets/Page_10_11.mp4" loop playsinline webkit-playsinline muted crossorigin="anonymous"></video>
         <video id="vid_p12_13" src="./assets/Page_12_13.mp4" loop playsinline webkit-playsinline muted crossorigin="anonymous"></video>
@@ -73,18 +192,18 @@
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <!-- Targets: videos invisible until shown on scan -->
-      <a-entity id="target_p1" mindar-image-target="targetIndex: 0"><a-video visible="false" src="#vid_p1" chromakey="videoSelector: #vid_p1; color: #00FF00" position="0 0 0.001" height="1" width="1"></a-video></a-entity>
-      <a-entity id="target_p4_5" mindar-image-target="targetIndex: 1"><a-video visible="false" src="#vid_p4_5" chromakey="videoSelector: #vid_p4_5; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
-      <a-entity id="target_p6_7" mindar-image-target="targetIndex: 2"><a-video visible="false" src="#vid_p6_7" chromakey="videoSelector: #vid_p6_7; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
-      <a-entity id="target_p8_9" mindar-image-target="targetIndex: 3"><a-video visible="false" src="#vid_p8_9" chromakey="videoSelector: #vid_p8_9; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
-      <a-entity id="target_p10_11" mindar-image-target="targetIndex: 4"><a-video visible="false" src="#vid_p10_11" chromakey="videoSelector: #vid_p10_11; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
-      <a-entity id="target_p12_13" mindar-image-target="targetIndex: 5"><a-video visible="false" src="#vid_p12_13" chromakey="videoSelector: #vid_p12_13; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
-      <a-entity id="target_p14_15" mindar-image-target="targetIndex: 6"><a-video visible="false" src="#vid_p14_15" chromakey="videoSelector: #vid_p14_15; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
-      <a-entity id="target_p16_17" mindar-image-target="targetIndex: 7"><a-video visible="false" src="#vid_p16_17" chromakey="videoSelector: #vid_p16_17; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
-      <a-entity id="target_p18_19" mindar-image-target="targetIndex: 8"><a-video visible="false" src="#vid_p18_19" chromakey="videoSelector: #vid_p18_19; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
-      <a-entity id="target_p20_21" mindar-image-target="targetIndex: 9"><a-video visible="false" src="#vid_p20_21" chromakey="videoSelector: #vid_p20_21; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
-      <a-entity id="target_p22_23" mindar-image-target="targetIndex: 10"><a-video visible="false" src="#vid_p22_23" chromakey="videoSelector: #vid_p22_23; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <!-- Targets: videos invisible until shown on scan, chromakey enabled -->
+      <a-entity id="target_p1" mindar-image-target="targetIndex: 0"><a-video visible="false" src="#vid_p1" chromakey="videoSelector: #vid_p1; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92" position="0 0 0.001" height="1" width="1"></a-video></a-entity>
+      <a-entity id="target_p4_5" mindar-image-target="targetIndex: 1"><a-video visible="false" src="#vid_p4_5" chromakey="videoSelector: #vid_p4_5; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <a-entity id="target_p6_7" mindar-image-target="targetIndex: 2"><a-video visible="false" src="#vid_p6_7" chromakey="videoSelector: #vid_p6_7; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <a-entity id="target_p8_9" mindar-image-target="targetIndex: 3"><a-video visible="false" src="#vid_p8_9" chromakey="videoSelector: #vid_p8_9; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <a-entity id="target_p10_11" mindar-image-target="targetIndex: 4"><a-video visible="false" src="#vid_p10_11" chromakey="videoSelector: #vid_p10_11; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <a-entity id="target_p12_13" mindar-image-target="targetIndex: 5"><a-video visible="false" src="#vid_p12_13" chromakey="videoSelector: #vid_p12_13; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <a-entity id="target_p14_15" mindar-image-target="targetIndex: 6"><a-video visible="false" src="#vid_p14_15" chromakey="videoSelector: #vid_p14_15; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <a-entity id="target_p16_17" mindar-image-target="targetIndex: 7"><a-video visible="false" src="#vid_p16_17" chromakey="videoSelector: #vid_p16_17; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <a-entity id="target_p18_19" mindar-image-target="targetIndex: 8"><a-video visible="false" src="#vid_p18_19" chromakey="videoSelector: #vid_p18_19; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <a-entity id="target_p20_21" mindar-image-target="targetIndex: 9"><a-video visible="false" src="#vid_p20_21" chromakey="videoSelector: #vid_p20_21; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <a-entity id="target_p22_23" mindar-image-target="targetIndex: 10"><a-video visible="false" src="#vid_p22_23" chromakey="videoSelector: #vid_p22_23; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
     </a-scene>
 
     <script>
@@ -97,7 +216,6 @@
         const playButton = document.getElementById('playButton');
         const enableSoundBtn = document.getElementById('enableSound');
 
-        // mappings in desired playback order (this order defines the sequence of videos in the song)
         const mappings = [
           { targetId: 'target_p4_5', videoId: 'vid_p4_5' },
           { targetId: 'target_p6_7', videoId: 'vid_p6_7' },
@@ -112,20 +230,16 @@
           { targetId: 'target_p1', videoId: 'vid_p1' }
         ];
 
-        // state
         let videosReady = false;
-        let durationsCollected = false;
-        let sequenceComputed = false;
         let totalVideos = mappings.length;
         let preloadedCount = 0;
-        let mappingData = {}; // map videoId -> { duration, startTime }
+        let mappingData = {};
         let rafId = null;
         let audioStarted = false;
 
-        // helpers
         function setLoaderProgress(percentage, text){ if (loaderBar) loaderBar.style.width = (percentage*100)+'%'; if (loaderText && text) loaderText.textContent = text; }
 
-        function ensureVideoReady(v, timeout=10000){
+        function ensureVideoReady(v, timeout=12000){
           return new Promise(res => {
             if (!v) return res(false);
             if (v.readyState >= 3) return res(true);
@@ -137,169 +251,100 @@
           });
         }
 
-        // sequential preload & metadata collection
-        async function preloadAllVideos() {
-          preloadedCount = 0;
-          mappingData = {};
+        async function preloadAllVideos(){
+          preloadedCount = 0; mappingData = {};
           for (const m of mappings) {
             const v = document.getElementById(m.videoId);
             if (!v) { preloadedCount++; setLoaderProgress(preloadedCount/totalVideos, `Fehlt: ${m.videoId}`); continue; }
             try {
-              // ensure media attributes
-              v.preload = 'auto'; v.playsInline = true; v.setAttribute('webkit-playsinline',''); v.crossOrigin = 'anonymous';
-              v.load();
+              v.preload = 'auto'; v.playsInline = true; v.setAttribute('webkit-playsinline',''); v.crossOrigin = 'anonymous'; v.load();
               const ready = await ensureVideoReady(v, 12000);
               if (!ready) console.warn('Video not ready quickly', m.videoId);
-
-              // attempt to get metadata duration
-              const dur = (v.duration && !isNaN(v.duration) && isFinite(v.duration)) ? v.duration : null;
+              const dur = (v.duration && !isNaN(v.duration) && isFinite(v.duration)) ? v.duration : 0;
               mappingData[m.videoId] = { duration: dur || 0, startTime: 0 };
-
-              // prime decoder: play muted shortly
-              try { v.muted = true; await v.play(); v.pause(); v.currentTime = 0; } catch(e) { /* ignore */ }
-            } catch (e) { console.warn('preload error', m.videoId, e); }
+              try { v.muted = true; await v.play(); v.pause(); v.currentTime = 0; } catch(e){}
+            } catch(e){ console.warn('preload error', m.videoId, e); }
             preloadedCount++; setLoaderProgress(preloadedCount/totalVideos, `Lade ${preloadedCount}/${totalVideos}`);
-            // small stagger to avoid saturating network/decoder
-            await new Promise(r => setTimeout(r, 300));
+            await new Promise(r=>setTimeout(r, 300));
           }
 
-          // if any duration missing, try a second pass to read duration after more data
+          // second pass for missing durations
           for (const m of mappings) {
             const v = document.getElementById(m.videoId);
             if (!v) continue;
-            if (!mappingData[m.videoId].duration || mappingData[m.videoId].duration === 0) {
-              if (v.duration && !isNaN(v.duration) && isFinite(v.duration)) mappingData[m.videoId].duration = v.duration;
+            if (!mappingData[m.videoId] || mappingData[m.videoId].duration === 0) {
+              if (v.duration && !isNaN(v.duration) && isFinite(v.duration)) mappingData[m.videoId] = { duration: v.duration, startTime: 0 };
             }
           }
 
-          durationsCollected = true;
+          // compute sequential start times
+          let t = 0; for (const m of mappings) { const d = mappingData[m.videoId] && mappingData[m.videoId].duration ? mappingData[m.videoId].duration : 0; mappingData[m.videoId].startTime = t; t += d; }
 
-          // compute start times sequentially (in mapping order)
-          let t = 0;
-          for (const m of mappings) {
-            const d = mappingData[m.videoId] && mappingData[m.videoId].duration ? mappingData[m.videoId].duration : 0;
-            mappingData[m.videoId].startTime = t;
-            t += d;
-          }
-
-          sequenceComputed = true;
-          videosReady = true;
-          setLoaderProgress(1, 'Fertig geladen');
-          // hide loader after small delay
-          setTimeout(()=>{ if (loader) loader.classList.add('hidden'); }, 600);
+          videosReady = true; setLoaderProgress(1, 'Fertig geladen');
+          setTimeout(()=>{ if (loader) loader.classList.add('hidden'); }, 500);
         }
 
-        // Start MindAR (camera) only after preload finished
-        async function startMindARAfterPreload() {
-          // Wait until preloadAllVideos finished (or timeout)
-          const start = performance.now();
-          while (!videosReady && performance.now()-start < 30000) { await new Promise(r=>setTimeout(r,200)); }
-
-          // Now request camera permissions and start mindar
-          const scene = document.querySelector('a-scene');
-          if (!scene) { console.error('a-scene not found'); return; }
-          // find mindar system
-          let mindar = null; const keys = [...Object.keys(scene.systems||{}), ...Object.keys(scene.components||{})];
-          for (const k of keys) { const obj = (scene.systems && scene.systems[k]) || (scene.components && scene.components[k]); if (obj && typeof obj.start === 'function') { mindar = obj; break; } }
+        async function startMindARAfterPreload(){
+          const start = performance.now(); while (!videosReady && performance.now()-start < 30000) await new Promise(r=>setTimeout(r,200));
+          const scene = document.querySelector('a-scene'); if (!scene) { console.error('a-scene not found'); return; }
+          let mindar = null; const keys = [...Object.keys(scene.systems||{}), ...Object.keys(scene.components||{})]; for (const k of keys) { const obj = (scene.systems && scene.systems[k]) || (scene.components && scene.components[k]); if (obj && typeof obj.start === 'function') { mindar = obj; break; } }
           if (!mindar) { console.error('MindAR start() not found'); return; }
-
-          try { await mindar.start(); console.log('MindAR started (camera permission requested)'); }
-          catch(e) { console.warn('MindAR start error', e); }
+          try { await mindar.start(); console.log('MindAR started'); } catch(e){ console.warn('MindAR start error', e); }
         }
 
-        // When audio is playing, update videos so they follow the sequence
         function startSequenceController(){
           function step(){
             if (!audioStarted) { rafId = requestAnimationFrame(step); return; }
             const a = mainAudio; if (!a || a.paused) { rafId = requestAnimationFrame(step); return; }
             const t = a.currentTime;
             for (const m of mappings) {
-              const v = document.getElementById(m.videoId);
-              if (!v) continue;
+              const v = document.getElementById(m.videoId); if (!v) continue;
               const md = mappingData[m.videoId] || { startTime:0, duration:0 };
-              const start = md.startTime || 0; const dur = md.duration || 0;
-              const rel = t - start;
+              const start = md.startTime || 0; const dur = md.duration || 0; const rel = t - start;
               if (rel >= 0 && rel < dur) {
-                // this video should be playing at rel
-                try {
-                  if (Math.abs(v.currentTime - rel) > 0.15) v.currentTime = rel;
-                  if (v.paused) v.play().catch(()=>{});
-                } catch(e){}
-              } else {
-                // pause and reset slightly to save decoding
-                try { if (!v.paused) v.pause(); } catch(e){}
-              }
+                try { if (Math.abs(v.currentTime - rel) > 0.15) v.currentTime = rel; if (v.paused) v.play().catch(()=>{}); } catch(e){}
+              } else { try { if (!v.paused) v.pause(); } catch(e){} }
             }
             rafId = requestAnimationFrame(step);
           }
           if (!rafId) rafId = requestAnimationFrame(step);
         }
 
-        // UI: show play button when target_p4_5 found and videosReady
         function setupTargetPlayButton(targetIdToWatch){
-          const targetEl = document.getElementById(targetIdToWatch);
-          if (!targetEl) return;
-          targetEl.addEventListener('targetFound', () => {
-            if (!videosReady) return; // wait
-            // show play overlay only if audio not started
-            if (!audioStarted) { playOverlay.classList.remove('hidden'); }
-          });
+          const targetEl = document.getElementById(targetIdToWatch); if (!targetEl) return;
+          targetEl.addEventListener('targetFound', () => { if (!videosReady) return; if (!audioStarted) playOverlay.classList.remove('hidden'); });
           targetEl.addEventListener('targetLost', () => { playOverlay.classList.add('hidden'); });
         }
 
-        // when play pressed: start audio and sequence controller
         playButton.addEventListener('click', async () => {
           playOverlay.classList.add('hidden');
-          // unmute and play audio (user gesture)
-          try {
-            if (mainAudio) { mainAudio.muted = false; await mainAudio.play(); audioStarted = true; }
-          } catch (e) {
-            console.warn('audio play failed', e); audioStarted = false; showEnableSound(true); return; }
-
-          // start sequence controller to drive background videos
+          try { if (mainAudio) { mainAudio.muted = false; await mainAudio.play(); audioStarted = true; } } catch(e){ console.warn('audio play failed', e); audioStarted = false; showEnableSound(true); return; }
+          // start background playback for all videos synchronized
+          for (const m of mappings) {
+            const v = document.getElementById(m.videoId); if (!v) continue;
+            try { const pos = mainAudio.currentTime - (mappingData[m.videoId] && mappingData[m.videoId].startTime ? mappingData[m.videoId].startTime : 0); if (pos > 0 && Math.abs(v.currentTime - pos) > 0.2) v.currentTime = pos; v.muted = true; v.play().catch(()=>{}); } catch(e){}
+          }
           startSequenceController();
         });
 
-        // enableSound fallback
-        enableSoundBtn.addEventListener('click', async () => { try { if (mainAudio) mainAudio.muted = false; if (mainAudio) await mainAudio.play(); hideEnableSound(); } catch(e){ console.warn(e); } });
+        function showEnableSound(debug){ if (!enableSoundBtn) return; enableSoundBtn.setAttribute('aria-hidden','false'); enableSoundBtn.style.display='inline-block'; if (debug) enableSoundBtn.classList.add('debug-visible'); }
+        function hideEnableSound(){ if (!enableSoundBtn) return; enableSoundBtn.setAttribute('aria-hidden','true'); enableSoundBtn.style.display='none'; enableSoundBtn.classList.remove('debug-visible'); }
+        enableSoundBtn.addEventListener('click', async ()=>{ try{ if (mainAudio) mainAudio.muted = false; if (mainAudio) await mainAudio.play(); hideEnableSound(); } catch(e){ console.warn(e); } });
 
-        // When any target is found, make the corresponding a-video visible; when lost, hide it
         function attachVisibilityHandlers(){
           for (const m of mappings) {
             const targetEl = document.getElementById(m.targetId);
             const aVideoEntity = document.querySelector(`#${m.targetId} a-video`);
             if (!targetEl || !aVideoEntity) continue;
-            targetEl.addEventListener('targetFound', () => {
-              // show entity only when its time window is active OR always show but video will be paused if not in window
-              aVideoEntity.setAttribute('visible','true');
-            });
-            targetEl.addEventListener('targetLost', () => {
-              aVideoEntity.setAttribute('visible','false');
-            });
+            targetEl.addEventListener('targetFound', () => { aVideoEntity.setAttribute('visible','true'); });
+            targetEl.addEventListener('targetLost', () => { aVideoEntity.setAttribute('visible','false'); });
           }
         }
 
-        // entry point
-        window.addEventListener('load', async () => {
-          // show loader
-          if (loader) loader.classList.remove('hidden');
-          setLoaderProgress(0, 'Starte Laden...');
-
-          // preload all videos sequentially
-          await preloadAllVideos();
-
-          // after preload, compute sequence already done in preloadAllVideos; next: start camera
-          await startMindARAfterPreload();
-
-          // attach visibility handlers and play button trigger for page 4_5
-          attachVisibilityHandlers();
-          setupTargetPlayButton('target_p4_5');
-
-          // hide loader if still visible
-          if (loader) loader.classList.add('hidden');
+        window.addEventListener('load', async ()=>{
+          if (loader) loader.classList.remove('hidden'); setLoaderProgress(0,'Starte Laden...'); await preloadAllVideos(); await startMindARAfterPreload(); attachVisibilityHandlers(); setupTargetPlayButton('target_p4_5'); if (loader) loader.classList.add('hidden');
         });
 
-        // expose state for debugging
         window.__TROPFEN = { mappings, mappingData, get videosReady(){ return videosReady; }, get audioStarted(){ return audioStarted; } };
       })();
     </script>
