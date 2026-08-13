@@ -138,10 +138,13 @@
                   float suppressedG = mix(tex.g, avg, suppress);
                   vec3 finalColor = vec3(tex.r, suppressedG, tex.b);
                   // slightly desaturate the keyed areas to reduce green halos
-                  finalColor = mix(finalColor, vec3(avg), alpha * 0.7);
+                  finalColor = mix(finalColor, vec3(avg), alpha * 0.9);
 
                   // output with inverted alpha (we want transparent where green was)
-                  gl_FragColor = vec4(finalColor, 1.0 - alpha);
+                  float outAlpha = 1.0 - alpha;
+                  // apply a small threshold to avoid very faint halos
+                  if (outAlpha < 0.04) discard;
+                  gl_FragColor = vec4(finalColor, outAlpha);
                 }`;
 
                 mesh.material = new THREE.ShaderMaterial({
@@ -159,6 +162,12 @@
                   depthTest: false,
                   side: THREE.DoubleSide
                 });
+
+                // reduce green halo artifacts with alphaTest and proper settings
+                mesh.material.alphaTest = 0.04;
+                mesh.material.depthWrite = false;
+                mesh.material.premultipliedAlpha = false;
+                mesh.material.needsUpdate = true;
 
                 mesh.renderOrder = 999;
                 if (mesh.material && mesh.material.uniforms) mesh.material.uniforms.texture1.value = videoTexture;
@@ -180,12 +189,10 @@
 
           // Stabilize transforms: improved smoothing to reduce jitter
           AFRAME.registerComponent('stable-transform', {
-            schema: { smoothing: { type: 'number', default: 0.22 } },
+            schema: { smoothing: { type: 'number', default: 0.35 } },
             init: function(){
               this.prevPos = new THREE.Vector3();
               this.prevQuat = new THREE.Quaternion();
-              this.tempVec = new THREE.Vector3();
-              this.tempQuat = new THREE.Quaternion();
               this.first = true;
             },
             tick: function(time, delta){
@@ -265,18 +272,18 @@
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <!-- Targets: videos invisible until shown on scan, chromakey enabled -->
-      <a-entity id="target_p1" mindar-image-target="targetIndex: 0"><a-video visible="false" stable-transform="smoothing:0.20" src="#vid_p1" chromakey="videoSelector: #vid_p1; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
-      <a-entity id="target_p4_5" mindar-image-target="targetIndex: 1"><a-video visible="false" stable-transform="smoothing:0.20" src="#vid_p4_5" chromakey="videoSelector: #vid_p4_5; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
-      <a-entity id="target_p6_7" mindar-image-target="targetIndex: 2"><a-video visible="false" stable-transform="smoothing:0.20" src="#vid_p6_7" chromakey="videoSelector: #vid_p6_7; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
-      <a-entity id="target_p8_9" mindar-image-target="targetIndex: 3"><a-video visible="false" stable-transform="smoothing:0.20" src="#vid_p8_9" chromakey="videoSelector: #vid_p8_9; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
-      <a-entity id="target_p10_11" mindar-image-target="targetIndex: 4"><a-video visible="false" stable-transform="smoothing:0.20" src="#vid_p10_11" chromakey="videoSelector: #vid_p10_11; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
-      <a-entity id="target_p12_13" mindar-image-target="targetIndex: 5"><a-video visible="false" stable-transform="smoothing:0.20" src="#vid_p12_13" chromakey="videoSelector: #vid_p12_13; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
-      <a-entity id="target_p14_15" mindar-image-target="targetIndex: 6"><a-video visible="false" stable-transform="smoothing:0.20" src="#vid_p14_15" chromakey="videoSelector: #vid_p14_15; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
-      <a-entity id="target_p16_17" mindar-image-target="targetIndex: 7"><a-video visible="false" stable-transform="smoothing:0.20" src="#vid_p16_17" chromakey="videoSelector: #vid_p16_17; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
-      <a-entity id="target_p18_19" mindar-image-target="targetIndex: 8"><a-video visible="false" stable-transform="smoothing:0.20" src="#vid_p18_19" chromakey="videoSelector: #vid_p18_19; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
-      <a-entity id="target_p20_21" mindar-image-target="targetIndex: 9"><a-video visible="false" stable-transform="smoothing:0.20" src="#vid_p20_21" chromakey="videoSelector: #vid_p20_21; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
-      <a-entity id="target_p22_23" mindar-image-target="targetIndex: 10"><a-video visible="false" stable-transform="smoothing:0.20" src="#vid_p22_23" chromakey="videoSelector: #vid_p22_23; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
+      <!-- Targets: videos invisible until shown on scan, chromakey enabled (stable-transform moved to parent entities) -->
+      <a-entity id="target_p1" mindar-image-target="targetIndex: 0" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p1" chromakey="videoSelector: #vid_p1; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
+      <a-entity id="target_p4_5" mindar-image-target="targetIndex: 1" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p4_5" chromakey="videoSelector: #vid_p4_5; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
+      <a-entity id="target_p6_7" mindar-image-target="targetIndex: 2" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p6_7" chromakey="videoSelector: #vid_p6_7; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
+      <a-entity id="target_p8_9" mindar-image-target="targetIndex: 3" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p8_9" chromakey="videoSelector: #vid_p8_9; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
+      <a-entity id="target_p10_11" mindar-image-target="targetIndex: 4" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p10_11" chromakey="videoSelector: #vid_p10_11; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
+      <a-entity id="target_p12_13" mindar-image-target="targetIndex: 5" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p12_13" chromakey="videoSelector: #vid_p12_13; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
+      <a-entity id="target_p14_15" mindar-image-target="targetIndex: 6" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p14_15" chromakey="videoSelector: #vid_p14_15; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
+      <a-entity id="target_p16_17" mindar-image-target="targetIndex: 7" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p16_17" chromakey="videoSelector: #vid_p16_17; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
+      <a-entity id="target_p18_19" mindar-image-target="targetIndex: 8" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p18_19" chromakey="videoSelector: #vid_p18_19; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
+      <a-entity id="target_p20_21" mindar-image-target="targetIndex: 9" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p20_21" chromakey="videoSelector: #vid_p20_21; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
+      <a-entity id="target_p22_23" mindar-image-target="targetIndex: 10" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p22_23" chromakey="videoSelector: #vid_p22_23; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
     </a-scene>
 
     <script>
@@ -375,7 +382,14 @@
           const scene = document.querySelector('a-scene'); if (!scene) { console.error('a-scene not found'); return; }
           let mindar = null; const keys = [...Object.keys(scene.systems||{}), ...Object.keys(scene.components||{})]; for (const k of keys) { const obj = (scene.systems && scene.systems[k]) || (scene.components && scene.components[k]); if (obj && obj.start && typeof obj.start === 'function' && k.toLowerCase().includes('mindar')) { mindar = obj; break; } }
           if (!mindar) { console.error('MindAR start() not found'); return; }
-          try { await mindar.start(); console.log('MindAR started'); } catch(e){ console.warn('MindAR start error', e); }
+          try { await mindar.start(); console.log('MindAR started');
+            // Improve canvas sharpness on high-DPR devices
+            try {
+              if (scene.renderer && typeof scene.renderer.setPixelRatio === 'function') {
+                scene.renderer.setPixelRatio(window.devicePixelRatio || 1);
+              }
+            } catch(e) { console.warn('setPixelRatio failed', e); }
+          } catch(e){ console.warn('MindAR start error', e); }
         }
 
         function startSequenceController(){
