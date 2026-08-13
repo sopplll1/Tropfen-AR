@@ -29,9 +29,19 @@
       /* Center play overlay (larger button) */
       #playOverlay { position: fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:11000; pointer-events:auto; }
       #playOverlay.hidden { display:none; }
-      #playOverlay button { pointer-events:auto; background: rgba(255,255,255,0.95); border:none; padding:26px 40px; font-size:26px; border-radius:999px; cursor:pointer; box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
+      #playOverlay button { pointer-events:auto; background: rgba(255,255,255,0.95); border:none; padding:26px; width:80px; height:80px; font-size:26px; border-radius:999px; cursor:pointer; box-shadow: 0 8px 24px rgba(0,0,0,0.2); display:flex; align-items:center; justify-content:center; }
+      #playOverlay svg { width:40px; height:40px; fill:#111; }
       #playOverlay button:active { transform:scale(0.97); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
       #playOverlay button:hover { box-shadow: 0 12px 32px rgba(0,0,0,0.2); }
+
+      /* Transform inspector */
+      #transformInspector { position: fixed; right: 12px; top: 12px; z-index: 12000; background: rgba(255,255,255,0.95); color:#111; border-radius:8px; padding:10px; font-family: sans-serif; width:260px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); display:block; }
+      #transformInspector h4 { margin: 0 0 8px 0; font-size:14px; }
+      #transformInspector label { display:block; font-size:12px; margin-top:8px; }
+      #transformInspector input[type=range] { width:100%; }
+      #transformInspector .small { font-size:11px; color:#444; }
+      #transformInspector .row { display:flex; gap:6px; }
+      #transformInspector button { margin-top:8px; padding:6px 8px; border-radius:6px; border:none; cursor:pointer; }
 
       /* Fallback control */
       #enableSound { position: fixed; left: 50%; transform: translateX(-50%); bottom: 5vh; z-index: 9999; display: none; background: rgba(42,55,106,0.95); color: #fff; border: none; padding: 10px 18px; border-radius: 8px; }
@@ -159,6 +169,39 @@
               try { if (el.getObject3D && el.getObject3D('mesh')) attach(); else { el.addEventListener('loaded', attach); setTimeout(attach,300); } } catch(e){ console.error('chromakey init error', e); }
             }
           });
+
+          // Stabilize transforms: simple smoothing component to reduce jitter
+          AFRAME.registerComponent('stable-transform', {
+            schema: { smoothing: { type: 'number', default: 0.16 } },
+            init: function(){
+              this.prevPos = new THREE.Vector3();
+              this.prevQuat = new THREE.Quaternion();
+              this.tempVec = new THREE.Vector3();
+              this.tempQuat = new THREE.Quaternion();
+              this.first = true;
+            },
+            tick: function(time, delta){
+              const obj = this.el.object3D;
+              if (!obj) return;
+              if (this.first) {
+                this.prevPos.copy(obj.position);
+                this.prevQuat.copy(obj.quaternion);
+                this.first = false;
+                return;
+              }
+              const alpha = 1 - Math.exp(-this.data.smoothing * (delta/16.666)); // frame-rate independent
+              // lerp position
+              this.tempVec.copy(obj.position).lerp(this.prevPos, alpha);
+              obj.position.copy(this.tempVec);
+              // slerp rotation
+              this.tempQuat.copy(obj.quaternion).slerp(this.prevQuat, alpha);
+              obj.quaternion.copy(this.tempQuat);
+              // store for next frame
+              this.prevPos.copy(obj.position);
+              this.prevQuat.copy(obj.quaternion);
+            }
+          });
+
         } catch(e){ console.error('Failed to register chromakey component', e); }
       })();
     </script>
@@ -169,7 +212,22 @@
     <div id="arLoader"><div class="box"><div id="loaderText">Lade AR-Inhalte…</div><div class="progress"><i id="loaderBar"></i></div></div></div>
 
     <!-- Play overlay -->
-    <div id="playOverlay" class="hidden"><button id="playButton">Play</button></div>
+    <div id="playOverlay" class="hidden"><button id="playButton" aria-label="Play">
+      <!-- SVG Play Icon -->
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+    </button></div>
+
+    <!-- Transform inspector (visible) -->
+    <div id="transformInspector">
+      <h4>AR-Adjuster <span class="small">(aktuelles Target)</span></h4>
+      <div id="ti-id" class="small">--</div>
+      <label>Pos X <input id="ti-posx" type="range" min="-1" max="1" step="0.01"></label>
+      <label>Pos Y <input id="ti-posy" type="range" min="-1" max="1" step="0.01"></label>
+      <label>Pos Z <input id="ti-posz" type="range" min="-1" max="1" step="0.01"></label>
+      <label>Rot Y <input id="ti-roty" type="range" min="-180" max="180" step="1"></label>
+      <label>Scale <input id="ti-scale" type="range" min="0.1" max="3" step="0.01"></label>
+      <div class="row"><button id="ti-reset">Reset</button><button id="ti-close">Schliessen</button></div>
+    </div>
 
     <!-- Fallback button -->
     <button id="enableSound" aria-hidden="true">Ton aktivieren</button>
@@ -196,17 +254,17 @@
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
       <!-- Targets: videos invisible until shown on scan, chromakey enabled -->
-      <a-entity id="target_p1" mindar-image-target="targetIndex: 0"><a-video visible="false" src="#vid_p1" chromakey="videoSelector: #vid_p1; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
-      <a-entity id="target_p4_5" mindar-image-target="targetIndex: 1"><a-video visible="false" src="#vid_p4_5" chromakey="videoSelector: #vid_p4_5; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
-      <a-entity id="target_p6_7" mindar-image-target="targetIndex: 2"><a-video visible="false" src="#vid_p6_7" chromakey="videoSelector: #vid_p6_7; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
-      <a-entity id="target_p8_9" mindar-image-target="targetIndex: 3"><a-video visible="false" src="#vid_p8_9" chromakey="videoSelector: #vid_p8_9; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
-      <a-entity id="target_p10_11" mindar-image-target="targetIndex: 4"><a-video visible="false" src="#vid_p10_11" chromakey="videoSelector: #vid_p10_11; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
-      <a-entity id="target_p12_13" mindar-image-target="targetIndex: 5"><a-video visible="false" src="#vid_p12_13" chromakey="videoSelector: #vid_p12_13; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
-      <a-entity id="target_p14_15" mindar-image-target="targetIndex: 6"><a-video visible="false" src="#vid_p14_15" chromakey="videoSelector: #vid_p14_15; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
-      <a-entity id="target_p16_17" mindar-image-target="targetIndex: 7"><a-video visible="false" src="#vid_p16_17" chromakey="videoSelector: #vid_p16_17; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
-      <a-entity id="target_p18_19" mindar-image-target="targetIndex: 8"><a-video visible="false" src="#vid_p18_19" chromakey="videoSelector: #vid_p18_19; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
-      <a-entity id="target_p20_21" mindar-image-target="targetIndex: 9"><a-video visible="false" src="#vid_p20_21" chromakey="videoSelector: #vid_p20_21; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
-      <a-entity id="target_p22_23" mindar-image-target="targetIndex: 10"><a-video visible="false" src="#vid_p22_23" chromakey="videoSelector: #vid_p22_23; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
+      <a-entity id="target_p1" mindar-image-target="targetIndex: 0"><a-video visible="false" stable-transform="smoothing:0.12" src="#vid_p1" chromakey="videoSelector: #vid_p1; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
+      <a-entity id="target_p4_5" mindar-image-target="targetIndex: 1"><a-video visible="false" stable-transform="smoothing:0.12" src="#vid_p4_5" chromakey="videoSelector: #vid_p4_5; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
+      <a-entity id="target_p6_7" mindar-image-target="targetIndex: 2"><a-video visible="false" stable-transform="smoothing:0.12" src="#vid_p6_7" chromakey="videoSelector: #vid_p6_7; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
+      <a-entity id="target_p8_9" mindar-image-target="targetIndex: 3"><a-video visible="false" stable-transform="smoothing:0.12" src="#vid_p8_9" chromakey="videoSelector: #vid_p8_9; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
+      <a-entity id="target_p10_11" mindar-image-target="targetIndex: 4"><a-video visible="false" stable-transform="smoothing:0.12" src="#vid_p10_11" chromakey="videoSelector: #vid_p10_11; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
+      <a-entity id="target_p12_13" mindar-image-target="targetIndex: 5"><a-video visible="false" stable-transform="smoothing:0.12" src="#vid_p12_13" chromakey="videoSelector: #vid_p12_13; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
+      <a-entity id="target_p14_15" mindar-image-target="targetIndex: 6"><a-video visible="false" stable-transform="smoothing:0.12" src="#vid_p14_15" chromakey="videoSelector: #vid_p14_15; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
+      <a-entity id="target_p16_17" mindar-image-target="targetIndex: 7"><a-video visible="false" stable-transform="smoothing:0.12" src="#vid_p16_17" chromakey="videoSelector: #vid_p16_17; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
+      <a-entity id="target_p18_19" mindar-image-target="targetIndex: 8"><a-video visible="false" stable-transform="smoothing:0.12" src="#vid_p18_19" chromakey="videoSelector: #vid_p18_19; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
+      <a-entity id="target_p20_21" mindar-image-target="targetIndex: 9"><a-video visible="false" stable-transform="smoothing:0.12" src="#vid_p20_21" chromakey="videoSelector: #vid_p20_21; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
+      <a-entity id="target_p22_23" mindar-image-target="targetIndex: 10"><a-video visible="false" stable-transform="smoothing:0.12" src="#vid_p22_23" chromakey="videoSelector: #vid_p22_23; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
     </a-scene>
 
     <script>
@@ -218,6 +276,16 @@
         const playOverlay = document.getElementById('playOverlay');
         const playButton = document.getElementById('playButton');
         const enableSoundBtn = document.getElementById('enableSound');
+
+        const inspector = document.getElementById('transformInspector');
+        const ti_id = document.getElementById('ti-id');
+        const ti_posx = document.getElementById('ti-posx');
+        const ti_posy = document.getElementById('ti-posy');
+        const ti_posz = document.getElementById('ti-posz');
+        const ti_roty = document.getElementById('ti-roty');
+        const ti_scale = document.getElementById('ti-scale');
+        const ti_reset = document.getElementById('ti-reset');
+        const ti_close = document.getElementById('ti-close');
 
         const mappings = [
           { targetId: 'target_p4_5', videoId: 'vid_p4_5' },
@@ -239,6 +307,8 @@
         let mappingData = {};
         let rafId = null;
         let audioStarted = false;
+        let currentTarget = null; // id of currently visible target
+        let transforms = JSON.parse(localStorage.getItem('tropfen.transforms') || '{}');
 
         function setLoaderProgress(percentage, text){ if (loaderBar) loaderBar.style.width = (percentage*100)+'%'; if (loaderText && text) loaderText.textContent = text; }
 
@@ -313,30 +383,94 @@
           if (!rafId) rafId = requestAnimationFrame(step);
         }
 
-        // Show overlay when ANY target is found
+        // Show overlay when ANY target is found and show inspector
         function setupPlayOverlayForAllTargets(){
           for (const m of mappings) {
             const targetEl = document.getElementById(m.targetId);
             if (!targetEl) continue;
-            targetEl.addEventListener('targetFound', () => { if (!videosReady) return; if (!audioStarted) playOverlay.classList.remove('hidden'); });
-            targetEl.addEventListener('targetLost', () => { playOverlay.classList.add('hidden'); });
+            targetEl.addEventListener('targetFound', () => { if (!videosReady) return; if (!audioStarted) playOverlay.classList.remove('hidden'); currentTarget = m.targetId; showInspectorFor(m.targetId); });
+            targetEl.addEventListener('targetLost', () => { playOverlay.classList.add('hidden'); currentTarget = null; /* keep inspector visible per request */ });
           }
         }
 
-        playButton.addEventListener('click', async () => {
-          playOverlay.classList.add('hidden');
-          try { if (mainAudio) { mainAudio.muted = false; await mainAudio.play(); audioStarted = true; } } catch(e){ console.warn('audio play failed', e); audioStarted = false; showEnableSound(true); }
-          // start background playback for all videos synchronized
-          for (const m of mappings) {
-            const v = document.getElementById(m.videoId); if (!v) continue;
-            try { const pos = mainAudio.currentTime - (mappingData[m.videoId] && mappingData[m.videoId].startTime ? mappingData[m.videoId].startTime : 0); if (pos > 0 && Math.abs(v.currentTime - pos) > 0.2) v.currentTime = pos; if (v.paused) v.play().catch(()=>{}); } catch(e){}
+        function togglePlayback(shouldPlay){
+          if (shouldPlay) {
+            playOverlay.classList.add('hidden');
+            try { if (mainAudio) { mainAudio.muted = false; mainAudio.play().catch(()=>{}); } } catch(e){ console.warn('audio play failed', e); }
+            // start all videos at synced positions
+            for (const m of mappings) {
+              const v = document.getElementById(m.videoId); if (!v) continue;
+              try { const pos = (mainAudio && !isNaN(mainAudio.currentTime)) ? mainAudio.currentTime - (mappingData[m.videoId] && mappingData[m.videoId].startTime ? mappingData[m.videoId].startTime : 0) : 0; if (pos > 0 && Math.abs(v.currentTime - pos) > 0.2) v.currentTime = pos; v.play().catch(()=>{}); } catch(e){}
+            }
+            audioStarted = true;
+            startSequenceController();
+          } else {
+            // pause all
+            try { if (mainAudio && !mainAudio.paused) mainAudio.pause(); } catch(e){}
+            for (const m of mappings) { const v = document.getElementById(m.videoId); try { if (v && !v.paused) v.pause(); } catch(e){} }
+            audioStarted = false;
+            playOverlay.classList.remove('hidden');
           }
-          startSequenceController();
+        }
+
+        // Click on play button starts playback
+        playButton.addEventListener('click', async (ev) => {
+          ev.stopPropagation();
+          togglePlayback(true);
+        });
+
+        // Tapping/clicking the screen when playing should pause everything and show the play overlay again
+        document.addEventListener('click', (ev)=>{
+          // ignore clicks on overlay or inspector controls
+          if (ev.target.closest('#playOverlay') || ev.target.closest('#transformInspector') || ev.target.closest('#enableSound')) return;
+          if (audioStarted) {
+            togglePlayback(false);
+          }
         });
 
         function showEnableSound(debug){ if (!enableSoundBtn) return; enableSoundBtn.setAttribute('aria-hidden','false'); enableSoundBtn.style.display='inline-block'; if (debug) enableSoundBtn.classList.add('debug-visible'); }
         function hideEnableSound(){ if (!enableSoundBtn) return; enableSoundBtn.setAttribute('aria-hidden','true'); enableSoundBtn.style.display='none'; enableSoundBtn.classList.remove('debug-visible'); }
         enableSoundBtn.addEventListener('click', async ()=>{ try{ if (mainAudio) mainAudio.muted = false; if (mainAudio) await mainAudio.play(); hideEnableSound(); } catch(e){ console.warn(e); } });
+
+        function applyTransformToEntity(aVideoEntity, t){
+          try {
+            if (!aVideoEntity) return;
+            if (t.position) aVideoEntity.setAttribute('position', `${t.position.x} ${t.position.y} ${t.position.z}`);
+            if (t.rotation) aVideoEntity.setAttribute('rotation', `${t.rotation.x} ${t.rotation.y} ${t.rotation.z}`);
+            if (t.scale) aVideoEntity.setAttribute('scale', `${t.scale.x} ${t.scale.y} ${t.scale.z}`);
+          } catch(e){}
+        }
+
+        function showInspectorFor(targetId){
+          const aVideoEntity = document.querySelector(`#${targetId} a-video`);
+          if (!aVideoEntity) { inspector.style.display = 'none'; return; }
+          inspector.style.display = 'block';
+          ti_id.textContent = targetId;
+          // load saved transform or defaults
+          const saved = transforms[targetId] || { position:{x:0,y:0,z:0}, rotation:{x:0,y:0,z:0}, scale:{x:1,y:1,z:1} };
+          // apply to entity
+          applyTransformToEntity(aVideoEntity, saved);
+          // populate controls
+          ti_posx.value = saved.position.x;
+          ti_posy.value = saved.position.y;
+          ti_posz.value = saved.position.z;
+          ti_roty.value = saved.rotation.y || 0;
+          ti_scale.value = saved.scale.x || 1;
+
+          // wire up listeners
+          function onChange(){
+            const t = { position:{ x: parseFloat(ti_posx.value), y: parseFloat(ti_posy.value), z: parseFloat(ti_posz.value) }, rotation:{ x:0, y: parseFloat(ti_roty.value), z:0 }, scale:{ x: parseFloat(ti_scale.value), y: parseFloat(ti_scale.value), z: parseFloat(ti_scale.value) } };
+            transforms[targetId] = t;
+            localStorage.setItem('tropfen.transforms', JSON.stringify(transforms));
+            applyTransformToEntity(aVideoEntity, t);
+          }
+          ti_posx.oninput = onChange; ti_posy.oninput = onChange; ti_posz.oninput = onChange; ti_roty.oninput = onChange; ti_scale.oninput = onChange;
+
+          ti_reset.onclick = ()=>{
+            delete transforms[targetId]; localStorage.setItem('tropfen.transforms', JSON.stringify(transforms)); showInspectorFor(targetId);
+          };
+          ti_close.onclick = ()=>{ inspector.style.display='none'; };
+        }
 
         function attachVisibilityHandlers(){
           for (const m of mappings) {
@@ -363,7 +497,7 @@
           if (loader) loader.classList.remove('hidden'); setLoaderProgress(0,'Starte Laden...'); await preloadAllVideos(); await startMindARAfterPreload(); attachVisibilityHandlers(); setupPlayOverlayForAllTargets();
         });
 
-        window.__TROPFEN = { mappings, mappingData, get videosReady(){ return videosReady; }, get audioStarted(){ return audioStarted; } };
+        window.__TROPFEN = { mappings, mappingData, get videosReady(){ return videosReady; }, get audioStarted(){ return audioStarted; }, transforms };
       })();
     </script>
   </body>
