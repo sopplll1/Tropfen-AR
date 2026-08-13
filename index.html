@@ -29,10 +29,12 @@
       /* Center play overlay (larger button) */
       #playOverlay { position: fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:11000; pointer-events:auto; }
       #playOverlay.hidden { display:none; }
-      #playOverlay button { pointer-events:auto; background: rgba(255,255,255,0.95); border:none; padding:26px 40px; font-size:26px; border-radius:999px; cursor:pointer; box-shadow: 0 8px 24px rgba(0,0,0,0.45); }
+      #playOverlay button { pointer-events:auto; background: rgba(255,255,255,0.95); border:none; padding:26px 40px; font-size:26px; border-radius:999px; cursor:pointer; box-shadow: 0 8px 24px rgba(0,0,0,0.15); transition:transform 0.1s,box-shadow 0.1s; }
+      #playOverlay button:active { transform:scale(0.97); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+      #playOverlay button:hover { box-shadow: 0 12px 32px rgba(0,0,0,0.2); }
 
       /* Fallback control */
-      #enableSound { position: fixed; left: 50%; transform: translateX(-50%); bottom: 5vh; z-index: 9999; display: none; background: rgba(42,55,106,0.95); color: #fff; border: none; padding: 10px 18px; font-size: 15px; border-radius: 12px; cursor: pointer; -webkit-tap-highlight-color: rgba(0,0,0,0); }
+      #enableSound { position: fixed; left: 50%; transform: translateX(-50%); bottom: 5vh; z-index: 9999; display: none; background: rgba(42,55,106,0.95); color: #fff; border: none; padding: 10px 18px; border-radius: 8px; cursor: pointer; font-size: 14px; }
       #enableSound[aria-hidden="false"] { display: inline-block; }
 
       a-scene { z-index: 1; }
@@ -53,7 +55,7 @@
       }
 
       /* For some devices the camera is rendered as a mirrored element — ensure it fills */
-      .mindar-video { position: fixed !important; left: 50% !important; top: 50% !important; transform: translate(-50%,-50%) !important; width: auto !important; height: 100% !important; object-fit: cover !important; object-position: center center !important; }
+      .mindar-video { position: fixed !important; left: 50% !important; top: 50% !important; transform: translate(-50%,-50%) !important; width: auto !important; height: 100% !important; object-fit: cover !important; z-index: 0 !important; }
 
     </style>
 
@@ -172,14 +174,14 @@
     <button id="enableSound" aria-hidden="true">Ton aktivieren</button>
 
     <!-- MindAR scene -->
-    <a-scene mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 1; uiLoading: true; uiScanning: true; uiError: true; uiTarget: true" color-space="sRGB" renderer="colorManagement: true; physicallyCorrectLights: false" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false" embedded>
+    <a-scene mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 1; uiLoading: true; uiScanning: true; uiError: true; uiTarget: true" color-space="sRGB" renderer="colorManagement: true; physically-correct-lights: true; alpha: true; antialias: true" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
       <a-assets>
         <audio id="mainAudio" src="./assets/Kompletter_song.mp3" crossorigin="anonymous" preload="auto"></audio>
 
         <!-- Videos: preload handled by script (we keep preload attributes minimal here) -->
         <video id="vid_p1" src="./assets/Page_1.mp4" loop playsinline webkit-playsinline muted crossorigin="anonymous"></video>
         <video id="vid_p4_5" src="./assets/Page_4_5.mp4" loop playsinline webkit-playsinline muted crossorigin="anonymous"></video>
-        <video id="vid_p6_7".src="./assets/Page_6_7.mp4" loop playsinline webkit-playsinline muted crossorigin="anonymous"></video>
+        <video id="vid_p6_7" src="./assets/Page_6_7.mp4" loop playsinline webkit-playsinline muted crossorigin="anonymous"></video>
         <video id="vid_p8_9" src="./assets/Page_8_9.mp4" loop playsinline webkit-playsinline muted crossorigin="anonymous"></video>
         <video id="vid_p10_11" src="./assets/Page_10_11.mp4" loop playsinline webkit-playsinline muted crossorigin="anonymous"></video>
         <video id="vid_p12_13" src="./assets/Page_12_13.mp4" loop playsinline webkit-playsinline muted crossorigin="anonymous"></video>
@@ -193,17 +195,17 @@
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
       <!-- Targets: videos invisible until shown on scan, chromakey enabled -->
-      <a-entity id="target_p1" mindar-image-target="targetIndex: 0"><a-video visible="false" src="#vid_p1" chromakey="videoSelector: #vid_p1; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92" position="0 0 0.001" height="1" width="1"></a-video></a-entity>
-      <a-entity id="target_p4_5" mindar-image-target="targetIndex: 1"><a-video visible="false" src="#vid_p4_5" chromakey="videoSelector: #vid_p4_5; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
-      <a-entity id="target_p6_7" mindar-image-target="targetIndex: 2"><a-video visible="false" src="#vid_p6_7" chromakey="videoSelector: #vid_p6_7; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
-      <a-entity id="target_p8_9" mindar-image-target="targetIndex: 3"><a-video visible="false" src="#vid_p8_9" chromakey="videoSelector: #vid_p8_9; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
-      <a-entity id="target_p10_11" mindar-image-target="targetIndex: 4"><a-video visible="false" src="#vid_p10_11" chromakey="videoSelector: #vid_p10_11; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
-      <a-entity id="target_p12_13" mindar-image-target="targetIndex: 5"><a-video visible="false" src="#vid_p12_13" chromakey="videoSelector: #vid_p12_13; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
-      <a-entity id="target_p14_15" mindar-image-target="targetIndex: 6"><a-video visible="false" src="#vid_p14_15" chromakey="videoSelector: #vid_p14_15; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
-      <a-entity id="target_p16_17" mindar-image-target="targetIndex: 7"><a-video visible="false" src="#vid_p16_17" chromakey="videoSelector: #vid_p16_17; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
-      <a-entity id="target_p18_19" mindar-image-target="targetIndex: 8"><a-video visible="false" src="#vid_p18_19" chromakey="videoSelector: #vid_p18_19; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
-      <a-entity id="target_p20_21" mindar-image-target="targetIndex: 9"><a-video visible="false" src="#vid_p20_21" chromakey="videoSelector: #vid_p20_21; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
-      <a-entity id="target_p22_23" mindar-image-target="targetIndex: 10"><a-video visible="false" src="#vid_p22_23" chromakey="videoSelector: #vid_p22_23; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <a-entity id="target_p1" mindar-image-target="targetIndex: 0"><a-video visible="false" src="#vid_p1" chromakey="videoSelector: #vid_p1; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
+      <a-entity id="target_p4_5" mindar-image-target="targetIndex: 1"><a-video visible="false" src="#vid_p4_5" chromakey="videoSelector: #vid_p4_5; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
+      <a-entity id="target_p6_7" mindar-image-target="targetIndex: 2"><a-video visible="false" src="#vid_p6_7" chromakey="videoSelector: #vid_p6_7; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
+      <a-entity id="target_p8_9" mindar-image-target="targetIndex: 3"><a-video visible="false" src="#vid_p8_9" chromakey="videoSelector: #vid_p8_9; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
+      <a-entity id="target_p10_11" mindar-image-target="targetIndex: 4"><a-video visible="false" src="#vid_p10_11" chromakey="videoSelector: #vid_p10_11; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
+      <a-entity id="target_p12_13" mindar-image-target="targetIndex: 5"><a-video visible="false" src="#vid_p12_13" chromakey="videoSelector: #vid_p12_13; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
+      <a-entity id="target_p14_15" mindar-image-target="targetIndex: 6"><a-video visible="false" src="#vid_p14_15" chromakey="videoSelector: #vid_p14_15; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
+      <a-entity id="target_p16_17" mindar-image-target="targetIndex: 7"><a-video visible="false" src="#vid_p16_17" chromakey="videoSelector: #vid_p16_17; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
+      <a-entity id="target_p18_19" mindar-image-target="targetIndex: 8"><a-video visible="false" src="#vid_p18_19" chromakey="videoSelector: #vid_p18_19; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
+      <a-entity id="target_p20_21" mindar-image-target="targetIndex: 9"><a-video visible="false" src="#vid_p20_21" chromakey="videoSelector: #vid_p20_21; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
+      <a-entity id="target_p22_23" mindar-image-target="targetIndex: 10"><a-video visible="false" src="#vid_p22_23" chromakey="videoSelector: #vid_p22_23; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.92"></a-video></a-entity>
     </a-scene>
 
     <script>
@@ -318,11 +320,11 @@
 
         playButton.addEventListener('click', async () => {
           playOverlay.classList.add('hidden');
-          try { if (mainAudio) { mainAudio.muted = false; await mainAudio.play(); audioStarted = true; } } catch(e){ console.warn('audio play failed', e); audioStarted = false; showEnableSound(true); return; }
+          try { if (mainAudio) { mainAudio.muted = false; await mainAudio.play(); audioStarted = true; } } catch(e){ console.warn('audio play failed', e); audioStarted = false; showEnableSound(true); }
           // start background playback for all videos synchronized
           for (const m of mappings) {
             const v = document.getElementById(m.videoId); if (!v) continue;
-            try { const pos = mainAudio.currentTime - (mappingData[m.videoId] && mappingData[m.videoId].startTime ? mappingData[m.videoId].startTime : 0); if (pos > 0 && Math.abs(v.currentTime - pos) > 0.2) v.currentTime = pos; v.muted = true; v.play().catch(()=>{}); } catch(e){}
+            try { const pos = mainAudio.currentTime - (mappingData[m.videoId] && mappingData[m.videoId].startTime ? mappingData[m.videoId].startTime : 0); if (pos > 0 && Math.abs(v.currentTime - pos) > 0.15) v.currentTime = pos; if (v.paused) v.play().catch(()=>{}); } catch(e){}
           }
           startSequenceController();
         });
@@ -342,7 +344,7 @@
         }
 
         window.addEventListener('load', async ()=>{
-          if (loader) loader.classList.remove('hidden'); setLoaderProgress(0,'Starte Laden...'); await preloadAllVideos(); await startMindARAfterPreload(); attachVisibilityHandlers(); setupTargetPlayButton('target_p4_5'); if (loader) loader.classList.add('hidden');
+          if (loader) loader.classList.remove('hidden'); setLoaderProgress(0,'Starte Laden...'); await preloadAllVideos(); await startMindARAfterPreload(); attachVisibilityHandlers(); setupTargetPlayButton('target_p1');
         });
 
         window.__TROPFEN = { mappings, mappingData, get videosReady(){ return videosReady; }, get audioStarted(){ return audioStarted; } };
