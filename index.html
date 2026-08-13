@@ -29,12 +29,12 @@
       /* Center play overlay (larger button) */
       #playOverlay { position: fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:11000; pointer-events:auto; }
       #playOverlay.hidden { display:none; }
-      #playOverlay button { pointer-events:auto; background: rgba(255,255,255,0.95); border:none; padding:26px 40px; font-size:26px; border-radius:999px; cursor:pointer; box-shadow: 0 8px 24px rgba(0,0,0,0.15); transition:transform 0.1s,box-shadow 0.1s; }
+      #playOverlay button { pointer-events:auto; background: rgba(255,255,255,0.95); border:none; padding:26px 40px; font-size:26px; border-radius:999px; cursor:pointer; box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
       #playOverlay button:active { transform:scale(0.97); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
       #playOverlay button:hover { box-shadow: 0 12px 32px rgba(0,0,0,0.2); }
 
       /* Fallback control */
-      #enableSound { position: fixed; left: 50%; transform: translateX(-50%); bottom: 5vh; z-index: 9999; display: none; background: rgba(42,55,106,0.95); color: #fff; border: none; padding: 10px 18px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+      #enableSound { position: fixed; left: 50%; transform: translateX(-50%); bottom: 5vh; z-index: 9999; display: none; background: rgba(42,55,106,0.95); color: #fff; border: none; padding: 10px 18px; border-radius: 8px; }
       #enableSound[aria-hidden="false"] { display: inline-block; }
 
       a-scene { z-index: 1; }
@@ -55,7 +55,7 @@
       }
 
       /* For some devices the camera is rendered as a mirrored element — ensure it fills */
-      .mindar-video { position: fixed !important; left: 50% !important; top: 50% !important; transform: translate(-50%,-50%) !important; width: auto !important; height: 100% !important; object-fit: cover !important; z-index: 0 !important; }
+      .mindar-video { position: fixed !important; left: 50% !important; top: 50% !important; transform: translate(-50%,-50%) !important; width: auto !important; height: 100% !important; object-fit: cover !important; }
 
     </style>
 
@@ -111,7 +111,8 @@
                       vec2 off = vec2(float(x), float(y)) * vec2(texel, texel);
                       vec3 sYC = rgb2ycbcr(texture2D(texture1, vUv + off).rgb);
                       float sd = distance(sYC.yz, keyYC.yz);
-                      float a = smoothstep(threshold - softness, threshold + softness, sd);
+                      // Inverted: a = 1 - smoothstep(...) so small sd (close to key color) => a ~= 1
+                      float a = 1.0 - smoothstep(threshold - softness, threshold + softness, sd);
                       sum += a;
                     }
                   }
@@ -174,7 +175,7 @@
     <button id="enableSound" aria-hidden="true">Ton aktivieren</button>
 
     <!-- MindAR scene -->
-    <a-scene mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 1; uiLoading: true; uiScanning: true; uiError: true; uiTarget: true" color-space="sRGB" renderer="colorManagement: true; physically-correct-lights: true; alpha: true; antialias: true" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
+    <a-scene mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 1; uiLoading: true; uiScanning: true; uiError: true; uiTarget: true" color-space="sRGB" renderer="colorManagement: true; physicallyCorrectLights: true">
       <a-assets>
         <audio id="mainAudio" src="./assets/Kompletter_song.mp3" crossorigin="anonymous" preload="auto"></audio>
 
@@ -289,7 +290,7 @@
         async function startMindARAfterPreload(){
           const start = performance.now(); while (!videosReady && performance.now()-start < 30000) await new Promise(r=>setTimeout(r,200));
           const scene = document.querySelector('a-scene'); if (!scene) { console.error('a-scene not found'); return; }
-          let mindar = null; const keys = [...Object.keys(scene.systems||{}), ...Object.keys(scene.components||{})]; for (const k of keys) { const obj = (scene.systems && scene.systems[k]) || (scene.components && scene.components[k]); if (obj && typeof obj.start === 'function') { mindar = obj; break; } }
+          let mindar = null; const keys = [...Object.keys(scene.systems||{}), ...Object.keys(scene.components||{})]; for (const k of keys) { const obj = (scene.systems && scene.systems[k]) || (scene.components && scene.components[k]); if (obj && obj.start && typeof obj.start === 'function' && k.toLowerCase().includes('mindar')) { mindar = obj; break; } }
           if (!mindar) { console.error('MindAR start() not found'); return; }
           try { await mindar.start(); console.log('MindAR started'); } catch(e){ console.warn('MindAR start error', e); }
         }
@@ -312,10 +313,14 @@
           if (!rafId) rafId = requestAnimationFrame(step);
         }
 
-        function setupTargetPlayButton(targetIdToWatch){
-          const targetEl = document.getElementById(targetIdToWatch); if (!targetEl) return;
-          targetEl.addEventListener('targetFound', () => { if (!videosReady) return; if (!audioStarted) playOverlay.classList.remove('hidden'); });
-          targetEl.addEventListener('targetLost', () => { playOverlay.classList.add('hidden'); });
+        // Show overlay when ANY target is found
+        function setupPlayOverlayForAllTargets(){
+          for (const m of mappings) {
+            const targetEl = document.getElementById(m.targetId);
+            if (!targetEl) continue;
+            targetEl.addEventListener('targetFound', () => { if (!videosReady) return; if (!audioStarted) playOverlay.classList.remove('hidden'); });
+            targetEl.addEventListener('targetLost', () => { playOverlay.classList.add('hidden'); });
+          }
         }
 
         playButton.addEventListener('click', async () => {
@@ -324,7 +329,7 @@
           // start background playback for all videos synchronized
           for (const m of mappings) {
             const v = document.getElementById(m.videoId); if (!v) continue;
-            try { const pos = mainAudio.currentTime - (mappingData[m.videoId] && mappingData[m.videoId].startTime ? mappingData[m.videoId].startTime : 0); if (pos > 0 && Math.abs(v.currentTime - pos) > 0.15) v.currentTime = pos; if (v.paused) v.play().catch(()=>{}); } catch(e){}
+            try { const pos = mainAudio.currentTime - (mappingData[m.videoId] && mappingData[m.videoId].startTime ? mappingData[m.videoId].startTime : 0); if (pos > 0 && Math.abs(v.currentTime - pos) > 0.2) v.currentTime = pos; if (v.paused) v.play().catch(()=>{}); } catch(e){}
           }
           startSequenceController();
         });
@@ -337,14 +342,25 @@
           for (const m of mappings) {
             const targetEl = document.getElementById(m.targetId);
             const aVideoEntity = document.querySelector(`#${m.targetId} a-video`);
+            const v = document.getElementById(m.videoId);
             if (!targetEl || !aVideoEntity) continue;
+
+            // Ensure A-Frame video plane uses a transparent material so shader alpha works
+            try {
+              aVideoEntity.setAttribute('material', `shader: flat; transparent: true; side:double`);
+              if (v && v.videoWidth && v.videoHeight) {
+                const aspect = (v.videoHeight / v.videoWidth) || 1;
+                aVideoEntity.setAttribute('geometry', `primitive: plane; width: 1; height: ${aspect}`);
+              }
+            } catch(e){ /* ignore */ }
+
             targetEl.addEventListener('targetFound', () => { aVideoEntity.setAttribute('visible','true'); });
             targetEl.addEventListener('targetLost', () => { aVideoEntity.setAttribute('visible','false'); });
           }
         }
 
         window.addEventListener('load', async ()=>{
-          if (loader) loader.classList.remove('hidden'); setLoaderProgress(0,'Starte Laden...'); await preloadAllVideos(); await startMindARAfterPreload(); attachVisibilityHandlers(); setupTargetPlayButton('target_p1');
+          if (loader) loader.classList.remove('hidden'); setLoaderProgress(0,'Starte Laden...'); await preloadAllVideos(); await startMindARAfterPreload(); attachVisibilityHandlers(); setupPlayOverlayForAllTargets();
         });
 
         window.__TROPFEN = { mappings, mappingData, get videosReady(){ return videosReady; }, get audioStarted(){ return audioStarted; } };
