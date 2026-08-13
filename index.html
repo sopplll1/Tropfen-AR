@@ -9,8 +9,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Swanky+and+Moo+Moo&display=swap" rel="stylesheet">
 
     <!-- A-Frame (stabile Version) -->
-    <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
-
+    <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script> 
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image.prod.js"></script> 
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image-aframe.prod.js"></script>
     <!-- MindAR A-Frame integration (stabile Version) -->
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image-aframe.prod.js"></script>
 
@@ -137,7 +138,7 @@
     >
       <a-assets>
         <!-- Master audio (metronome/song). Will be started when page 4_5 is scanned -->
-        <audio id="mainAudio" src="./assets/kompletter_song.mp3" crossorigin="anonymous" preload="auto" loop></audio>
+        <audio id="mainAudio" src="./assets/Kompletter_song.mp3" crossorigin="anonymous" preload="auto" loop></audio>
 
         <!-- All videos lazy-loaded -->
         <video id="vid_p1" src="./assets/Page_1.mp4" loop playsinline webkit-playsinline muted preload="none" crossorigin="anonymous"></video>
