@@ -9,19 +9,15 @@
     <link href="https://fonts.googleapis.com/css2?family=Swanky+and+Moo+Moo&display=swap" rel="stylesheet">
 
     <!-- A-Frame (stabile Version) -->
-    <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script> 
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image.prod.js"></script> 
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image-aframe.prod.js"></script>
-    <!-- MindAR A-Frame integration (stabile Version) -->
+    <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
+
+    <!-- MindAR core + A-Frame integration (stabile Version) -->
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image-aframe.prod.js"></script>
 
-    <style> /* Kamera-Hintergrund: Video-Elemente ohne src fullscreen machen */ 
-      video:not([src]), video[src=""] { position: fixed !important; left: 0 !important; top: 0 !important; width: 100% !important; height: 100% !important; object-fit: cover !important; transform: none !important; margin: 0 !important; z-index: 0 !important; } 
-      /* Stelle sicher, dass die A-Frame Szene darüber liegt */ 
-      a-scene { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; } 
-      /* Canvas ebenfalls über dem Video (falls nötig) */ 
-      a-scene canvas { position: absolute; left: 0; top: 0; width: 100% !important; height: 100% !important; z-index: 1 !important; } 
-    </style>
+    <style>
+      html,body { height:100%; margin:0; background:#000; font-family: 'Swanky and Moo Moo', cursive; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
+      a-scene { position: absolute; inset: 0; width:100%; height:100%; }
 
       /* Very small fallback control shown only if autoplay is blocked */
       #enableSound {
@@ -41,6 +37,21 @@
         -webkit-tap-highlight-color: rgba(0,0,0,0);
       }
       #enableSound[aria-hidden="false"] { display: inline-block; }
+
+      /* Force MindAR camera video fullscreen (debug/fix for small preview) */
+      video:not([src]), video[src=""] {
+        position: fixed !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+        transform: none !important;
+        margin: 0 !important;
+        z-index: 0 !important;
+      }
+      a-scene { z-index: 1; }
+      a-scene canvas { position: absolute; left: 0; top: 0; width: 100% !important; height: 100% !important; z-index: 1 !important; }
     </style>
 
     <script>
@@ -99,7 +110,7 @@
                     },
                     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
                     fragmentShader:
-                      'precision mediump float; varying vec2 vUv; uniform sampler2D texture1; uniform vec3 keyColor; uniform float threshold; void main() { vec4 tex = texture2D(texture1, vUv); float d = distance(tex.rgb, keyColor); float alpha = smoothstep(threshold - 0.1, threshold + 0.1, d); gl_FragColor = vec4(tex.rgb, tex.a * (1.0 - alpha)); }',
+                      'precision mediump float; varying vec2 vUv; uniform sampler2D texture1; uniform vec3 keyColor; uniform float threshold; void main() { vec4 tex = texture2D(texture1, vUv); float d = distance(tex.rgb, keyColor); if (d < threshold) discard; gl_FragColor = tex; }',
                     transparent: true,
                     depthTest: true,
                     side: THREE.DoubleSide
@@ -240,15 +251,17 @@
 
         // Utility to show fallback button
         function showEnableSound() {
+          if (!enableSoundBtn) return;
           enableSoundBtn.setAttribute('aria-hidden', 'false');
           enableSoundBtn.style.display = 'inline-block';
         }
         function hideEnableSound() {
+          if (!enableSoundBtn) return;
           enableSoundBtn.setAttribute('aria-hidden', 'true');
           enableSoundBtn.style.display = 'none';
         }
 
-        // Try to start MindAR immediately after load to trigger camera permission
+        // Try to start MindAR robustly after scene load to trigger camera permission
         async function startMindAROnLoad() {
           const scene = document.querySelector('a-scene');
           if (!scene) {
@@ -256,14 +269,19 @@
             return;
           }
 
-          // Find MindAR system robustly
-          let mindar = null;
-          if (scene.systems && scene.systems['mindar-image']) mindar = scene.systems['mindar-image'];
-          else if (scene.components && scene.components['mindar-image']) mindar = scene.components['mindar-image'];
-          else if (scene.systems && scene.systems['mindar-image-system']) mindar = scene.systems['mindar-image-system'];
+          // Wait until scene is loaded
+          await new Promise(res => { if (scene.hasLoaded) res(); else scene.addEventListener('loaded', res); });
 
-          if (!mindar || typeof mindar.start !== 'function') {
-            console.error('MindAR start() not found. Ensure mind-ar script loaded.');
+          // Search for an object with a start() function
+          let mindar = null;
+          const keys = [...Object.keys(scene.systems || {}), ...Object.keys(scene.components || {})];
+          for (const k of keys) {
+            const obj = (scene.systems && scene.systems[k]) || (scene.components && scene.components[k]);
+            if (obj && typeof obj.start === 'function') { mindar = obj; break; }
+          }
+
+          if (!mindar) {
+            console.error('MindAR system with start() not found');
             return;
           }
 
@@ -287,6 +305,7 @@
 
             // When any target is found -> sync that target's video to mainAudio beat and play
             targetEl.addEventListener('targetFound', async () => {
+              console.log('DEBUG: targetFound', map.targetId);
               try {
                 const cur = (mainAudio && mainAudio.currentTime && !isNaN(mainAudio.currentTime)) ? mainAudio.currentTime : 0;
                 try { videoEl.currentTime = cur % loopDuration; } catch(e) { console.warn('Could not set video currentTime', e); }
