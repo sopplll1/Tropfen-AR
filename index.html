@@ -39,57 +39,89 @@
     </style>
 
     <script>
-      // Chromakey shader component
-      AFRAME.registerComponent('chromakey', {
-        schema: {
-          color: { type: 'color', default: '#00FF00' },
-          videoSelector: { type: 'selector', default: null }
-        },
-        init: function () {
-          const el = this.el;
-          const self = this;
+      // Chromakey shader component (robust, wrapped in try/catch so it won't break the page)
+      (function(){
+        if (!window.AFRAME) {
+          console.warn('AFRAME not found when defining chromakey component');
+          return;
+        }
 
-          const attach = () => {
-            let videoEl = self.data.videoSelector;
-            if (!videoEl) {
-              const srcAttr = el.getAttribute('src');
-              if (srcAttr && typeof srcAttr === 'string' && srcAttr.startsWith('#')) {
-                videoEl = document.querySelector(srcAttr);
+        try {
+          AFRAME.registerComponent('chromakey', {
+            schema: {
+              color: { type: 'color', default: '#00FF00' },
+              videoSelector: { type: 'selector', default: null }
+            },
+            init: function () {
+              const el = this.el;
+              const self = this;
+
+              const attach = () => {
+                try {
+                  let videoEl = self.data.videoSelector;
+                  if (!videoEl) {
+                    const srcAttr = el.getAttribute('src');
+                    if (srcAttr && typeof srcAttr === 'string' && srcAttr.startsWith('#')) {
+                      videoEl = document.querySelector(srcAttr);
+                    }
+                  }
+                  if (!videoEl) return;
+
+                  // Create video texture
+                  if (!window.THREE) {
+                    console.warn('THREE not available yet, retrying attach');
+                    setTimeout(attach, 200);
+                    return;
+                  }
+
+                  const videoTexture = new THREE.VideoTexture(videoEl);
+                  videoTexture.minFilter = THREE.LinearFilter;
+                  videoTexture.magFilter = THREE.LinearFilter;
+                  videoTexture.format = THREE.RGBFormat;
+
+                  const mesh = el.getObject3D('mesh');
+                  if (!mesh) {
+                    // a-video may not have created its mesh yet — retry shortly
+                    setTimeout(attach, 200);
+                    return;
+                  }
+
+                  mesh.material = new THREE.ShaderMaterial({
+                    uniforms: {
+                      texture1: { value: videoTexture },
+                      keyColor: { value: new THREE.Color(self.data.color) },
+                      threshold: { value: 0.45 }
+                    },
+                    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+                    fragmentShader:
+                      'precision mediump float; varying vec2 vUv; uniform sampler2D texture1; uniform vec3 keyColor; uniform float threshold; void main() { vec4 tex = texture2D(texture1, vUv); float d = distance(tex.rgb, keyColor); float alpha = smoothstep(threshold - 0.1, threshold + 0.1, d); gl_FragColor = vec4(tex.rgb, tex.a * (1.0 - alpha)); }',
+                    transparent: true,
+                    depthTest: true,
+                    side: THREE.DoubleSide
+                  });
+
+                  // Keep reference so texture updates continue
+                  if (mesh.material && mesh.material.uniforms) mesh.material.uniforms.texture1.value = videoTexture;
+                } catch (err) {
+                  console.error('chromakey attach error', err);
+                }
+              };
+
+              try {
+                if (el.getObject3D && el.getObject3D('mesh')) attach();
+                else {
+                  el.addEventListener('loaded', attach);
+                  setTimeout(attach, 300);
+                }
+              } catch (e) {
+                console.error('chromakey init error', e);
               }
             }
-            if (!videoEl) return;
-
-            // Create video texture
-            const videoTexture = new THREE.VideoTexture(videoEl);
-            videoTexture.minFilter = THREE.LinearFilter;
-            videoTexture.magFilter = THREE.LinearFilter;
-            videoTexture.format = THREE.RGBFormat;
-
-            const mesh = el.getObject3D('mesh');
-            if (!mesh) return;
-
-            mesh.material = new THREE.ShaderMaterial({
-              uniforms: {
-                texture1: { value: videoTexture },
-                keyColor: { value: new THREE.Color(self.data.color) },
-                threshold: { value: 0.45 }
-              },
-              vertexShader:
-                'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-              fragmentShader:
-                'precision mediump float; varying vec2 vUv; uniform sampler2D texture1; uniform vec3 keyColor; uniform float threshold; void main() { vec4 tex = texture2D(texture1, vUv); float d = distance(tex.rgb, keyColor); float alpha = smoothstep(threshold - 0.08, threshold + 0.08, d); gl_FragColor = vec4(tex.rgb, 1.0 - alpha); }',
-              transparent: true,
-              depthTest: true
-            });
-          };
-
-          if (el.getObject3D('mesh')) attach();
-          else {
-            el.addEventListener('loaded', attach);
-            setTimeout(attach, 300);
-          }
+          });
+        } catch (e) {
+          console.error('Failed to register chromakey component', e);
         }
-      });
+      })();
     </script>
   </head>
 
@@ -194,10 +226,12 @@
         ];
 
         // Configure mainAudio for autoplay attempts
-        mainAudio.loop = true;
-        mainAudio.preload = 'auto';
-        mainAudio.crossOrigin = "anonymous";
-        mainAudio.muted = true; // start muted to allow autoplay attempt where possible
+        if (mainAudio) {
+          mainAudio.loop = true;
+          mainAudio.preload = 'auto';
+          mainAudio.crossOrigin = "anonymous";
+          mainAudio.muted = true; // start muted to allow autoplay attempt where possible
+        }
 
         // Utility to show fallback button
         function showEnableSound() {
@@ -249,10 +283,10 @@
             // When any target is found -> sync that target's video to mainAudio beat and play
             targetEl.addEventListener('targetFound', async () => {
               try {
-                const cur = (mainAudio.currentTime && !isNaN(mainAudio.currentTime)) ? mainAudio.currentTime : 0;
-                videoEl.currentTime = cur % loopDuration;
+                const cur = (mainAudio && mainAudio.currentTime && !isNaN(mainAudio.currentTime)) ? mainAudio.currentTime : 0;
+                try { videoEl.currentTime = cur % loopDuration; } catch(e) { console.warn('Could not set video currentTime', e); }
               } catch (e) {
-                console.warn('Could not set video currentTime', e);
+                console.warn('Could not read mainAudio currentTime', e);
               }
 
               // Play the video (muted)
@@ -262,7 +296,7 @@
               } catch (e) { /* ignore */ }
 
               // If this is page 4_5, start/unmute mainAudio
-              if (map.targetId === 'target_p4_5') {
+              if (map.targetId === 'target_p4_5' && mainAudio) {
                 try {
                   // First attempt: unmute and play
                   mainAudio.muted = false;
@@ -298,10 +332,10 @@
         }
 
         // Fallback user gesture to enable sound if autoplay blocked
-        enableSoundBtn.addEventListener('click', async () => {
+        if (enableSoundBtn) enableSoundBtn.addEventListener('click', async () => {
           try {
-            mainAudio.muted = false;
-            await mainAudio.play();
+            if (mainAudio) mainAudio.muted = false;
+            if (mainAudio) await mainAudio.play();
             hideEnableSound();
           } catch (e) {
             console.warn('User-initiated mainAudio.play() failed', e);
