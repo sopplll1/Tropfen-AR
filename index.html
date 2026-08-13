@@ -107,6 +107,7 @@ uniform vec3 keyColor;
 uniform float threshold;
 uniform float softness;
 uniform float spillSuppress;
+uniform float texel;
 
 // convert rgb to ycbcr (BT.601)
 vec3 rgb2ycbcr(vec3 c) {
@@ -124,11 +125,11 @@ void main(){
   float d = distance(pixYCbCr.yz, keyYCbCr.yz);
   float alphaRaw = smoothstep(threshold - softness, threshold + softness, d);
 
-  // 3x3 box blur on alpha to soften edges
-  float sum = 0.0; float w = 1.0/512.0; // texel guess; will be adjusted by GPU but good enough
+  // 3x3 box blur on alpha to soften edges (use texel uniform for proper offsets)
+  float sum = 0.0;
   for(int ox=-1; ox<=1; ox++){
     for(int oy=-1; oy<=1; oy++){
-      vec2 off = vec2(float(ox), float(oy))*vec2(w,w);
+      vec2 off = vec2(float(ox), float(oy))*vec2(texel,texel);
       vec4 s = texture2D(texture1, vUv + off);
       vec3 sYCbCr = rgb2ycbcr(s.rgb);
       float sd = distance(sYCbCr.yz, keyYCbCr.yz);
@@ -151,7 +152,8 @@ void main(){
                       keyColor: { value: new THREE.Color(self.data.color) },
                       threshold: { value: 0.15 }, // tuned for YCbCr distance
                       softness: { value: 0.05 },
-                      spillSuppress: { value: 0.9 }
+                      spillSuppress: { value: 0.9 },
+                      texel: { value: 1.0/512.0 }
                     },
                     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
                     fragmentShader: fragment,
@@ -162,6 +164,19 @@ void main(){
 
                   mesh.renderOrder = 999; // draw on top
                   if (mesh.material && mesh.material.uniforms) mesh.material.uniforms.texture1.value = videoTexture;
+
+                  // adjust texel uniform when video metadata available
+                  if (videoEl.readyState >= 1) {
+                    const size = Math.max(videoEl.videoWidth || 512, videoEl.videoHeight || 512) || 512;
+                    mesh.material.uniforms.texel.value = 1.0 / size;
+                  } else {
+                    videoEl.addEventListener('loadedmetadata', () => {
+                      try {
+                        const size = Math.max(videoEl.videoWidth || 512, videoEl.videoHeight || 512) || 512;
+                        mesh.material.uniforms.texel.value = 1.0 / size;
+                      } catch(e){}
+                    }, { once: true });
+                  }
                 } catch(err){ console.error('chromakey attach error', err); }
               };
               try { if (el.getObject3D && el.getObject3D('mesh')) attach(); else { el.addEventListener('loaded', attach); setTimeout(attach,300); } } catch(e){ console.error('chromakey init error', e); }
@@ -185,7 +200,7 @@ void main(){
       <a-assets>
         <audio id="mainAudio" src="./assets/Kompletter_song.mp3" crossorigin="anonymous" preload="auto" loop></audio>
 
-        <!-- Videos: critical ones preload=auto; rest lazy -->
+        <!-- Videos: critical ones preload=auto; rest lazy. Entities are initially invisible -->
         <video id="vid_p1" src="./assets/Page_1.mp4" loop playsinline webkit-playsinline muted preload="auto" crossorigin="anonymous"></video>
         <video id="vid_p4_5" src="./assets/Page_4_5.mp4" loop playsinline webkit-playsinline muted preload="auto" crossorigin="anonymous"></video>
         <video id="vid_p6_7" src="./assets/Page_6_7.mp4" loop playsinline webkit-playsinline muted preload="none" crossorigin="anonymous"></video>
@@ -201,18 +216,18 @@ void main(){
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <!-- Targets with small z-offset to avoid z-fighting -->
-      <a-entity id="target_p1" mindar-image-target="targetIndex: 0"><a-video src="#vid_p1" chromakey="videoSelector: #vid_p1; color: #00FF00" position="0 0 0.001" height="1" width="1"></a-video></a-entity>
-      <a-entity id="target_p4_5" mindar-image-target="targetIndex: 1"><a-video src="#vid_p4_5" chromakey="videoSelector: #vid_p4_5; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
-      <a-entity id="target_p6_7" mindar-image-target="targetIndex: 2"><a-video src="#vid_p6_7" chromakey="videoSelector: #vid_p6_7; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
-      <a-entity id="target_p8_9" mindar-image-target="targetIndex: 3"><a-video src="#vid_p8_9" chromakey="videoSelector: #vid_p8_9; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
-      <a-entity id="target_p10_11" mindar-image-target="targetIndex: 4"><a-video src="#vid_p10_11" chromakey="videoSelector: #vid_p10_11; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
-      <a-entity id="target_p12_13" mindar-image-target="targetIndex: 5"><a-video src="#vid_p12_13" chromakey="videoSelector: #vid_p12_13; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
-      <a-entity id="target_p14_15" mindar-image-target="targetIndex: 6"><a-video src="#vid_p14_15" chromakey="videoSelector: #vid_p14_15; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
-      <a-entity id="target_p16_17" mindar-image-target="targetIndex: 7"><a-video src="#vid_p16_17" chromakey="videoSelector: #vid_p16_17; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
-      <a-entity id="target_p18_19" mindar-image-target="targetIndex: 8"><a-video src="#vid_p18_19" chromakey="videoSelector: #vid_p18_19; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
-      <a-entity id="target_p20_21" mindar-image-target="targetIndex: 9"><a-video src="#vid_p20_21" chromakey="videoSelector: #vid_p20_21; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
-      <a-entity id="target_p22_23" mindar-image-target="targetIndex: 10"><a-video src="#vid_p22_23" chromakey="videoSelector: #vid_p22_23; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <!-- Targets with small z-offset to avoid z-fighting; videos hidden until scanned -->
+      <a-entity id="target_p1" mindar-image-target="targetIndex: 0"><a-video visible="false" src="#vid_p1" chromakey="videoSelector: #vid_p1; color: #00FF00" position="0 0 0.001" height="1" width="1"></a-video></a-entity>
+      <a-entity id="target_p4_5" mindar-image-target="targetIndex: 1"><a-video visible="false" src="#vid_p4_5" chromakey="videoSelector: #vid_p4_5; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <a-entity id="target_p6_7" mindar-image-target="targetIndex: 2"><a-video visible="false" src="#vid_p6_7" chromakey="videoSelector: #vid_p6_7; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <a-entity id="target_p8_9" mindar-image-target="targetIndex: 3"><a-video visible="false" src="#vid_p8_9" chromakey="videoSelector: #vid_p8_9; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <a-entity id="target_p10_11" mindar-image-target="targetIndex: 4"><a-video visible="false" src="#vid_p10_11" chromakey="videoSelector: #vid_p10_11; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <a-entity id="target_p12_13" mindar-image-target="targetIndex: 5"><a-video visible="false" src="#vid_p12_13" chromakey="videoSelector: #vid_p12_13; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <a-entity id="target_p14_15" mindar-image-target="targetIndex: 6"><a-video visible="false" src="#vid_p14_15" chromakey="videoSelector: #vid_p14_15; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <a-entity id="target_p16_17" mindar-image-target="targetIndex: 7"><a-video visible="false" src="#vid_p16_17" chromakey="videoSelector: #vid_p16_17; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <a-entity id="target_p18_19" mindar-image-target="targetIndex: 8"><a-video visible="false" src="#vid_p18_19" chromakey="videoSelector: #vid_p18_19; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <a-entity id="target_p20_21" mindar-image-target="targetIndex: 9"><a-video visible="false" src="#vid_p20_21" chromakey="videoSelector: #vid_p20_21; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <a-entity id="target_p22_23" mindar-image-target="targetIndex: 10"><a-video visible="false" src="#vid_p22_23" chromakey="videoSelector: #vid_p22_23; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
     </a-scene>
 
     <!-- Fallback button -->
@@ -243,6 +258,7 @@ void main(){
         ];
 
         let videosReady = false;
+        const syncControllers = {};
 
         // Configure mainAudio
         if (mainAudio) { mainAudio.loop = true; mainAudio.preload = 'auto'; mainAudio.crossOrigin = 'anonymous'; mainAudio.muted = true; }
@@ -271,7 +287,6 @@ void main(){
             if (!v) continue;
             try {
               v.preload = 'auto'; v.playsInline = true; v.setAttribute('webkit-playsinline',''); v.muted = true; v.load();
-              // wait for canplay or timeout
               const ready = await ensureVideoReady(v, perTimeout);
               if (ready) {
                 try { await v.play(); v.pause(); v.currentTime = 0; } catch(e) {}
@@ -281,36 +296,52 @@ void main(){
           }
         }
 
+        // Start all videos in background, muted, synced to audio clock
+        async function startAllVideosBackground() {
+          if (!mainAudio) console.warn('mainAudio not found');
+          const audioTime = (mainAudio && !isNaN(mainAudio.currentTime)) ? mainAudio.currentTime : 0;
+          for (const m of mappings) {
+            const v = document.getElementById(m.videoId);
+            const aVideoEntity = document.querySelector(`#${m.targetId} a-video`);
+            if (!v) continue;
+            try {
+              // sync video position to audio
+              const pos = audioTime % (m.loopDuration || defaultLoop);
+              try { v.currentTime = pos; } catch(e) {}
+              v.muted = true;
+              v.playsInline = true;
+              v.setAttribute('webkit-playsinline','');
+              try { const p = v.play(); if (p && p.catch) p.catch(()=>{}); } catch(e) {}
+              // ensure sync controller exists
+              if (!v.__sync) v.__sync = createSyncController(v, m.loopDuration || defaultLoop, mainAudio);
+              v.__sync.start();
+              // keep entity invisible until scanned
+              if (aVideoEntity) aVideoEntity.setAttribute('visible','false');
+            } catch (e) { console.warn('startAllVideosBackground error', m.videoId, e); }
+          }
+        }
+
         // Camera quality best-effort: increase renderer pixel ratio and try pre-getUserMedia
         async function improveCameraQuality() {
           try {
             const scene = document.querySelector('a-scene');
             if (scene && scene.renderer && typeof scene.renderer.setPixelRatio === 'function') {
-              const dpr = Math.min(window.devicePixelRatio || 1, 1.5); // clamp to avoid huge cost
+              const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
               scene.renderer.setPixelRatio(dpr);
               console.log('Set renderer pixel ratio', dpr);
             }
           } catch (e) { console.warn('Could not set pixel ratio', e); }
 
-          // try to pre-acquire a higher-res stream and attach to the first camera-like video element (best-effort)
           try {
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
             const constraints = { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } };
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
-            // find the camera preview video (no id)
             const candidate = Array.from(document.querySelectorAll('video')).find(v => !v.id && !v.src);
             if (candidate) {
-              candidate.srcObject = stream;
-              candidate.play().catch(()=>{});
-              console.log('Assigned pre-acquired stream to camera preview element');
-            } else {
-              // store for MindAR to possibly reuse
-              window.__ARC_preAcquiredStream = stream;
-              console.log('Pre-acquired camera stream stored');
-            }
-          } catch (e) {
-            console.warn('Pre-getUserMedia failed (best-effort)', e);
-          }
+              try { candidate.srcObject = stream; candidate.play().catch(()=>{}); console.log('Assigned pre-acquired stream to camera preview element'); }
+              catch(e){ window.__ARC_preAcquiredStream = stream; console.log('Stored pre-acquired stream'); }
+            } else { window.__ARC_preAcquiredStream = stream; console.log('Pre-acquired camera stream stored'); }
+          } catch (e) { console.warn('Pre-getUserMedia failed (best-effort)', e); }
         }
 
         // Sync controller
@@ -341,9 +372,9 @@ void main(){
           // Improve camera quality best-effort
           improveCameraQuality().catch(()=>{});
 
-          // Preload all videos sequentially in the background (but don't block camera permission)
+          // Preload all videos sequentially in the background
           const allVideoIds = mappings.map(m => m.videoId);
-          preloadAllVideosSequentially(allVideoIds, 10000, 500).then(()=>{ videosReady = true; console.log('All videos preloaded/primed'); }).catch(e=>{ videosReady=false; console.warn('preloadAllVideosSequentially error', e); });
+          preloadAllVideosSequentially(allVideoIds, 10000, 500).then(()=>{ videosReady = true; console.log('All videos preloaded/primed'); startAllVideosBackground(); }).catch(e=>{ videosReady=false; console.warn('preloadAllVideosSequentially error', e); startAllVideosBackground(); });
 
           // Wait until scene loaded
           await new Promise(res => { if (scene.hasLoaded) res(); else scene.addEventListener('loaded', res); });
@@ -367,20 +398,23 @@ void main(){
               console.log('DEBUG: targetFound', map.targetId);
               showLoader();
               try {
-                // wait until all videos preloaded or until per-target video ready
-                if (!videosReady) {
-                  // wait a short while for global preload to finish
-                  const waitStart = performance.now();
-                  while (!videosReady && performance.now() - waitStart < 8000) { await new Promise(r=>setTimeout(r,200)); }
-                }
+                // wait a short while if global preload still running
+                if (!videosReady) { const waitStart = performance.now(); while (!videosReady && performance.now()-waitStart < 8000) { await new Promise(r=>setTimeout(r,200)); } }
                 const ready = await ensureVideoReady(videoEl, 6000);
                 if (!ready) console.warn('Video not ready quickly for', map.videoId);
 
-                const cur = (mainAudio && mainAudio.currentTime && !isNaN(mainAudio.currentTime)) ? mainAudio.currentTime : 0;
-                const audioPos = cur % (map.loopDuration || defaultLoop);
-                try { videoEl.currentTime = audioPos; } catch(e) { console.warn('Could not set video currentTime', e); }
-                videoEl.playbackRate = 1; try { const p = videoEl.play(); if (p && p.catch) p.catch(err=>console.warn('video.play() failed',err)); } catch(e){}
-                if (!videoEl.__sync) videoEl.__sync = createSyncController(videoEl, map.loopDuration || defaultLoop, mainAudio); videoEl.__sync.start();
+                // show the corresponding a-video entity; the underlying video is already playing in background
+                aVideoEntity.setAttribute('visible', 'true');
+
+                // ensure shader texel updated
+                try {
+                  const mesh = aVideoEntity.getObject3D('mesh');
+                  if (mesh && mesh.material && mesh.material.uniforms && videoEl.videoWidth) mesh.material.uniforms.texel.value = 1.0 / Math.max(videoEl.videoWidth, videoEl.videoHeight);
+                } catch(e) {}
+
+                // ensure sync controller active
+                if (!videoEl.__sync) videoEl.__sync = createSyncController(videoEl, map.loopDuration || defaultLoop, mainAudio);
+                videoEl.__sync.start();
               } catch (e) { console.warn('Error during targetFound handling', e); } finally { hideLoader(); }
 
               // If this is page 4_5, start/unmute mainAudio only if global preload done (or after small wait)
@@ -392,7 +426,7 @@ void main(){
               }
             });
 
-            targetEl.addEventListener('targetLost', () => { try { if (videoEl.__sync) { videoEl.__sync.stop(); } videoEl.pause(); } catch(e){} });
+            targetEl.addEventListener('targetLost', () => { try { if (videoEl.__sync) { videoEl.__sync.stop(); } aVideoEntity.setAttribute('visible','false'); } catch(e){} });
           });
         }
 
