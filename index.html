@@ -73,13 +73,9 @@
     </style>
 
     <script>
-      // Chromakey shader component (robust, wrapped in try/catch so it won't break the page)
+      // Improved Chromakey shader component
       (function(){
-        if (!window.AFRAME) {
-          console.warn('AFRAME not found when defining chromakey component');
-          return;
-        }
-
+        if (!window.AFRAME) { console.warn('AFRAME not found when defining chromakey component'); return; }
         try {
           AFRAME.registerComponent('chromakey', {
             schema: {
@@ -87,102 +83,97 @@
               videoSelector: { type: 'selector', default: null }
             },
             init: function () {
-              const el = this.el;
-              const self = this;
-
+              const el = this.el; const self = this;
               const attach = () => {
                 try {
                   let videoEl = self.data.videoSelector;
                   if (!videoEl) {
                     const srcAttr = el.getAttribute('src');
-                    if (srcAttr && typeof srcAttr === 'string' && srcAttr.startsWith('#')) {
-                      videoEl = document.querySelector(srcAttr);
-                    }
+                    if (srcAttr && typeof srcAttr === 'string' && srcAttr.startsWith('#')) videoEl = document.querySelector(srcAttr);
                   }
                   if (!videoEl) return;
-
-                  // Create video texture
-                  if (!window.THREE) {
-                    console.warn('THREE not available yet, retrying attach');
-                    setTimeout(attach, 200);
-                    return;
-                  }
+                  if (!window.THREE) { console.warn('THREE not available yet, retrying attach'); setTimeout(attach,200); return; }
 
                   const videoTexture = new THREE.VideoTexture(videoEl);
-                  videoTexture.minFilter = THREE.LinearFilter;
-                  videoTexture.magFilter = THREE.LinearFilter;
-                  videoTexture.format = THREE.RGBFormat;
+                  videoTexture.minFilter = THREE.LinearFilter; videoTexture.magFilter = THREE.LinearFilter; videoTexture.format = THREE.RGBFormat;
 
-                  const mesh = el.getObject3D('mesh');
-                  if (!mesh) {
-                    // a-video may not have created its mesh yet — retry shortly
-                    setTimeout(attach, 200);
-                    return;
-                  }
+                  const mesh = el.getObject3D('mesh'); if (!mesh) { setTimeout(attach,200); return; }
 
-                  mesh.material = new THREE.ShaderMaterial({
-                    uniforms: {
-                      texture1: { value: videoTexture },
-                      keyColor: { value: new THREE.Color(self.data.color) },
-                      threshold: { value: 0.35 },
-                      softness: { value: 0.08 },
-                      spillSuppress: { value: 0.85 }
-                    },
-                    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-                    fragmentShader: `precision mediump float;
+                  // Fragment shader: YCbCr chroma distance + simple 3x3 alpha feathering + spill suppression
+                  const fragment = `precision mediump float;
 varying vec2 vUv;
 uniform sampler2D texture1;
 uniform vec3 keyColor;
 uniform float threshold;
 uniform float softness;
 uniform float spillSuppress;
-void main() {
+
+// convert rgb to ycbcr (BT.601)
+vec3 rgb2ycbcr(vec3 c) {
+  float y  =  0.299*c.r + 0.587*c.g + 0.114*c.b;
+  float cb = -0.168736*c.r - 0.331264*c.g + 0.5*c.b + 0.5;
+  float cr =  0.5*c.r - 0.418688*c.g - 0.081312*c.b + 0.5;
+  return vec3(y, cb, cr);
+}
+
+void main(){
   vec4 tex = texture2D(texture1, vUv);
-  float d = distance(tex.rgb, keyColor);
-  float alpha = smoothstep(threshold - softness, threshold + softness, d);
+  vec3 keyYCbCr = rgb2ycbcr(keyColor);
+  vec3 pixYCbCr = rgb2ycbcr(tex.rgb);
+  // chroma distance using Cb/Cr
+  float d = distance(pixYCbCr.yz, keyYCbCr.yz);
+  float alphaRaw = smoothstep(threshold - softness, threshold + softness, d);
+
+  // 3x3 box blur on alpha to soften edges
+  float sum = 0.0; float w = 1.0/512.0; // texel guess; will be adjusted by GPU but good enough
+  for(int ox=-1; ox<=1; ox++){
+    for(int oy=-1; oy<=1; oy++){
+      vec2 off = vec2(float(ox), float(oy))*vec2(w,w);
+      vec4 s = texture2D(texture1, vUv + off);
+      vec3 sYCbCr = rgb2ycbcr(s.rgb);
+      float sd = distance(sYCbCr.yz, keyYCbCr.yz);
+      float a = smoothstep(threshold - softness, threshold + softness, sd);
+      sum += a;
+    }
+  }
+  float alpha = sum / 9.0;
+
+  // spill suppression: desaturate greenish component proportionally where keyed
   float avg = (tex.r + tex.g + tex.b) / 3.0;
   float suppressedG = mix(tex.g, avg, spillSuppress * (1.0 - alpha));
   vec3 finalColor = vec3(tex.r, suppressedG, tex.b);
   gl_FragColor = vec4(finalColor, alpha);
-}`,
+}`;
+
+                  mesh.material = new THREE.ShaderMaterial({
+                    uniforms: {
+                      texture1: { value: videoTexture },
+                      keyColor: { value: new THREE.Color(self.data.color) },
+                      threshold: { value: 0.15 }, // tuned for YCbCr distance
+                      softness: { value: 0.05 },
+                      spillSuppress: { value: 0.9 }
+                    },
+                    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+                    fragmentShader: fragment,
                     transparent: true,
-                    depthTest: true,
+                    depthTest: false,
                     side: THREE.DoubleSide
                   });
 
-                  // reduce z-fighting: draw on top and disable depthTest if desired
-                  try {
-                    mesh.renderOrder = 999;
-                    mesh.material.depthTest = false;
-                  } catch (e) { /* ignore */ }
-
-                  // Keep reference so texture updates continue
+                  mesh.renderOrder = 999; // draw on top
                   if (mesh.material && mesh.material.uniforms) mesh.material.uniforms.texture1.value = videoTexture;
-                } catch (err) {
-                  console.error('chromakey attach error', err);
-                }
+                } catch(err){ console.error('chromakey attach error', err); }
               };
-
-              try {
-                if (el.getObject3D && el.getObject3D('mesh')) attach();
-                else {
-                  el.addEventListener('loaded', attach);
-                  setTimeout(attach, 300);
-                }
-              } catch (e) {
-                console.error('chromakey init error', e);
-              }
+              try { if (el.getObject3D && el.getObject3D('mesh')) attach(); else { el.addEventListener('loaded', attach); setTimeout(attach,300); } } catch(e){ console.error('chromakey init error', e); }
             }
           });
-        } catch (e) {
-          console.error('Failed to register chromakey component', e);
-        }
+        } catch(e){ console.error('Failed to register chromakey component', e); }
       })();
     </script>
   </head>
 
   <body>
-    <!-- MindAR scene: ui* enabled so native scanning UI appears for the user -->
+    <!-- MindAR scene -->
     <a-scene
       mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 1; uiLoading: true; uiScanning: true; uiError: true; uiTarget: true"
       color-space="sRGB"
@@ -192,10 +183,9 @@ void main() {
       embedded
     >
       <a-assets>
-        <!-- Master audio (metronome/song). Will be started when page 4_5 is scanned -->
         <audio id="mainAudio" src="./assets/Kompletter_song.mp3" crossorigin="anonymous" preload="auto" loop></audio>
 
-        <!-- All videos lazy-loaded; first pages primed with preload auto -->
+        <!-- Videos: critical ones preload=auto; rest lazy -->
         <video id="vid_p1" src="./assets/Page_1.mp4" loop playsinline webkit-playsinline muted preload="auto" crossorigin="anonymous"></video>
         <video id="vid_p4_5" src="./assets/Page_4_5.mp4" loop playsinline webkit-playsinline muted preload="auto" crossorigin="anonymous"></video>
         <video id="vid_p6_7" src="./assets/Page_6_7.mp4" loop playsinline webkit-playsinline muted preload="none" crossorigin="anonymous"></video>
@@ -211,53 +201,21 @@ void main() {
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <!-- Targets: each a-entity with mindar-image-target that contains a single a-video -->
-      <a-entity id="target_p1" mindar-image-target="targetIndex: 0">
-        <a-video src="#vid_p1" chromakey="videoSelector: #vid_p1; color: #00FF00" position="0 0 0.001" height="1" width="1" scale="1.16 1.16 1.16"></a-video>
-      </a-entity>
-
-      <a-entity id="target_p4_5" mindar-image-target="targetIndex: 1">
-        <a-video src="#vid_p4_5" chromakey="videoSelector: #vid_p4_5; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
-      </a-entity>
-
-      <a-entity id="target_p6_7" mindar-image-target="targetIndex: 2">
-        <a-video src="#vid_p6_7" chromakey="videoSelector: #vid_p6_7; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
-      </a-entity>
-
-      <a-entity id="target_p8_9" mindar-image-target="targetIndex: 3">
-        <a-video src="#vid_p8_9" chromakey="videoSelector: #vid_p8_9; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
-      </a-entity>
-
-      <a-entity id="target_p10_11" mindar-image-target="targetIndex: 4">
-        <a-video src="#vid_p10_11" chromakey="videoSelector: #vid_p10_11; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
-      </a-entity>
-
-      <a-entity id="target_p12_13" mindar-image-target="targetIndex: 5">
-        <a-video src="#vid_p12_13" chromakey="videoSelector: #vid_p12_13; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
-      </a-entity>
-
-      <a-entity id="target_p14_15" mindar-image-target="targetIndex: 6">
-        <a-video src="#vid_p14_15" chromakey="videoSelector: #vid_p14_15; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
-      </a-entity>
-
-      <a-entity id="target_p16_17" mindar-image-target="targetIndex: 7">
-        <a-video src="#vid_p16_17" chromakey="videoSelector: #vid_p16_17; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
-      </a-entity>
-
-      <a-entity id="target_p18_19" mindar-image-target="targetIndex: 8">
-        <a-video src="#vid_p18_19" chromakey="videoSelector: #vid_p18_19; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
-      </a-entity>
-
-      <a-entity id="target_p20_21" mindar-image-target="targetIndex: 9">
-        <a-video src="#vid_p20_21" chromakey="videoSelector: #vid_p20_21; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
-      </a-entity>
-
-      <a-entity id="target_p22_23" mindar-image-target="targetIndex: 10">
-        <a-video src="#vid_p22_23" chromakey="videoSelector: #vid_p22_23; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2" scale="1.2 1.2 1.2"></a-video>
-      </a-entity>
+      <!-- Targets with small z-offset to avoid z-fighting -->
+      <a-entity id="target_p1" mindar-image-target="targetIndex: 0"><a-video src="#vid_p1" chromakey="videoSelector: #vid_p1; color: #00FF00" position="0 0 0.001" height="1" width="1"></a-video></a-entity>
+      <a-entity id="target_p4_5" mindar-image-target="targetIndex: 1"><a-video src="#vid_p4_5" chromakey="videoSelector: #vid_p4_5; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <a-entity id="target_p6_7" mindar-image-target="targetIndex: 2"><a-video src="#vid_p6_7" chromakey="videoSelector: #vid_p6_7; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <a-entity id="target_p8_9" mindar-image-target="targetIndex: 3"><a-video src="#vid_p8_9" chromakey="videoSelector: #vid_p8_9; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <a-entity id="target_p10_11" mindar-image-target="targetIndex: 4"><a-video src="#vid_p10_11" chromakey="videoSelector: #vid_p10_11; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <a-entity id="target_p12_13" mindar-image-target="targetIndex: 5"><a-video src="#vid_p12_13" chromakey="videoSelector: #vid_p12_13; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <a-entity id="target_p14_15" mindar-image-target="targetIndex: 6"><a-video src="#vid_p14_15" chromakey="videoSelector: #vid_p14_15; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <a-entity id="target_p16_17" mindar-image-target="targetIndex: 7"><a-video src="#vid_p16_17" chromakey="videoSelector: #vid_p16_17; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <a-entity id="target_p18_19" mindar-image-target="targetIndex: 8"><a-video src="#vid_p18_19" chromakey="videoSelector: #vid_p18_19; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <a-entity id="target_p20_21" mindar-image-target="targetIndex: 9"><a-video src="#vid_p20_21" chromakey="videoSelector: #vid_p20_21; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
+      <a-entity id="target_p22_23" mindar-image-target="targetIndex: 10"><a-video src="#vid_p22_23" chromakey="videoSelector: #vid_p22_23; color: #00FF00" position="0 0 0.001" height="0.6" width="1.2"></a-video></a-entity>
     </a-scene>
 
-    <!-- Fallback button only shown if autoplay blocked -->
+    <!-- Fallback button -->
     <button id="enableSound" aria-hidden="true">Ton aktivieren</button>
 
     <!-- Loader overlay -->
@@ -265,12 +223,11 @@ void main() {
 
     <script>
       (function () {
-        const loopDuration = 4.0; // seconds (video loop length) - adjust per video if needed
+        const defaultLoop = 4.0;
         const mainAudio = document.getElementById('mainAudio');
         const enableSoundBtn = document.getElementById('enableSound');
         const arLoader = document.getElementById('arLoader');
 
-        // Map target IDs to their video IDs
         const mappings = [
           { targetId: 'target_p1', videoId: 'vid_p1', critical: true, loopDuration: 4.0 },
           { targetId: 'target_p4_5', videoId: 'vid_p4_5', critical: true, loopDuration: 4.0 },
@@ -285,242 +242,166 @@ void main() {
           { targetId: 'target_p22_23', videoId: 'vid_p22_23', critical: false, loopDuration: 4.0 }
         ];
 
-        // Configure mainAudio for autoplay attempts
-        if (mainAudio) {
-          mainAudio.loop = true;
-          mainAudio.preload = 'auto';
-          mainAudio.crossOrigin = "anonymous";
-          mainAudio.muted = true; // start muted to allow autoplay attempt where possible
-        }
+        let videosReady = false;
 
-        // Utility to show fallback button
-        function showEnableSound(debug) {
-          if (!enableSoundBtn) return;
-          enableSoundBtn.setAttribute('aria-hidden', 'false');
-          enableSoundBtn.style.display = 'inline-block';
-          if (debug) enableSoundBtn.classList.add('debug-visible');
-        }
-        function hideEnableSound() {
-          if (!enableSoundBtn) return;
-          enableSoundBtn.setAttribute('aria-hidden', 'true');
-          enableSoundBtn.style.display = 'none';
-          enableSoundBtn.classList.remove('debug-visible');
-        }
+        // Configure mainAudio
+        if (mainAudio) { mainAudio.loop = true; mainAudio.preload = 'auto'; mainAudio.crossOrigin = 'anonymous'; mainAudio.muted = true; }
 
-        function showLoader() { if (arLoader) arLoader.classList.add('show'); }
-        function hideLoader() { if (arLoader) arLoader.classList.remove('show'); }
+        function showEnableSound(debug) { if (!enableSoundBtn) return; enableSoundBtn.setAttribute('aria-hidden','false'); enableSoundBtn.style.display='inline-block'; if (debug) enableSoundBtn.classList.add('debug-visible'); }
+        function hideEnableSound() { if (!enableSoundBtn) return; enableSoundBtn.setAttribute('aria-hidden','true'); enableSoundBtn.style.display='none'; enableSoundBtn.classList.remove('debug-visible'); }
+        function showLoader() { if (arLoader) arLoader.classList.add('show'); } function hideLoader() { if (arLoader) arLoader.classList.remove('show'); }
 
-        // Helper: wait until a video has metadata / frames available (canplay) with timeout
-        function ensureVideoReady(v, timeout=4000) {
+        // Ensure video ready helper (canplay/canplaythrough)
+        function ensureVideoReady(v, timeout=6000) {
           return new Promise(res => {
             if (!v) return res(false);
-            if (v.readyState >= 3) return res(true); // HAVE_FUTURE_DATA / canplaythrough
+            if (v.readyState >= 3) return res(true);
             let done = false;
             const ok = () => { if (done) return; done = true; clearTimeout(t); res(true); };
-            v.addEventListener('canplay', ok, { once: true });
-            v.addEventListener('canplaythrough', ok, { once: true });
+            v.addEventListener('canplay', ok, { once:true });
+            v.addEventListener('canplaythrough', ok, { once:true });
             const t = setTimeout(()=>{ if (!done) { done = true; res(false); } }, timeout);
           });
         }
 
-        // Prime critical videos to reduce first-frame latency
-        function primeCriticalVideos() {
-          mappings.filter(m => m.critical).forEach(m => {
-            const v = document.getElementById(m.videoId);
-            if (!v) return;
+        // Sequentially preload & prime a list of video elements
+        async function preloadAllVideosSequentially(videoIds, perTimeout = 10000, stagger = 400) {
+          for (const id of videoIds) {
+            const v = document.getElementById(id);
+            if (!v) continue;
             try {
-              v.preload = 'auto';
-              v.playsInline = true;
-              v.setAttribute('webkit-playsinline', '');
-              v.muted = true;
-              v.load();
-              v.addEventListener('loadeddata', () => {
-                // quick play/pause to warm decoder
-                v.play().then(()=>{ v.pause(); v.currentTime = 0; }).catch(()=>{});
-              }, { once: true });
-            } catch (e) { /* ignore */ }
-          });
+              v.preload = 'auto'; v.playsInline = true; v.setAttribute('webkit-playsinline',''); v.muted = true; v.load();
+              // wait for canplay or timeout
+              const ready = await ensureVideoReady(v, perTimeout);
+              if (ready) {
+                try { await v.play(); v.pause(); v.currentTime = 0; } catch(e) {}
+              }
+            } catch (e) { console.warn('preload error', id, e); }
+            await new Promise(r => setTimeout(r, stagger));
+          }
         }
 
-        // Sync controller to keep video in time with audio master
-        function createSyncController(videoEl, loopDuration, audioEl) {
-          let rafId = null;
-          const maxHardSync = 0.12; // seconds - larger -> hard seek
-          const resyncGain = 0.35;  // playbackRate correction strength
+        // Camera quality best-effort: increase renderer pixel ratio and try pre-getUserMedia
+        async function improveCameraQuality() {
+          try {
+            const scene = document.querySelector('a-scene');
+            if (scene && scene.renderer && typeof scene.renderer.setPixelRatio === 'function') {
+              const dpr = Math.min(window.devicePixelRatio || 1, 1.5); // clamp to avoid huge cost
+              scene.renderer.setPixelRatio(dpr);
+              console.log('Set renderer pixel ratio', dpr);
+            }
+          } catch (e) { console.warn('Could not set pixel ratio', e); }
 
+          // try to pre-acquire a higher-res stream and attach to the first camera-like video element (best-effort)
+          try {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+            const constraints = { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } };
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            // find the camera preview video (no id)
+            const candidate = Array.from(document.querySelectorAll('video')).find(v => !v.id && !v.src);
+            if (candidate) {
+              candidate.srcObject = stream;
+              candidate.play().catch(()=>{});
+              console.log('Assigned pre-acquired stream to camera preview element');
+            } else {
+              // store for MindAR to possibly reuse
+              window.__ARC_preAcquiredStream = stream;
+              console.log('Pre-acquired camera stream stored');
+            }
+          } catch (e) {
+            console.warn('Pre-getUserMedia failed (best-effort)', e);
+          }
+        }
+
+        // Sync controller
+        function createSyncController(videoEl, loopDuration, audioEl) {
+          let rafId = null; const maxHardSync = 0.12; const resyncGain = 0.35;
           function step() {
             if (!videoEl || videoEl.paused || !audioEl) { rafId = requestAnimationFrame(step); return; }
-            const audioTime = audioEl.currentTime || 0;
-            const audioPos = audioTime % loopDuration;
-            const videoPos = videoEl.currentTime % loopDuration;
-            let delta = audioPos - videoPos;
-            if (delta > loopDuration / 2) delta -= loopDuration;
-            if (delta < -loopDuration / 2) delta += loopDuration;
-
-            if (Math.abs(delta) > maxHardSync) {
-              try { videoEl.currentTime = audioPos; videoEl.play().catch(()=>{}); } catch (e) {}
-            } else {
-              const adj = 1 + delta * resyncGain;
-              const pr = Math.max(0.93, Math.min(1.07, adj));
-              videoEl.playbackRate = pr;
-            }
+            const audioTime = audioEl.currentTime || 0; const audioPos = audioTime % loopDuration; const videoPos = videoEl.currentTime % loopDuration;
+            let delta = audioPos - videoPos; if (delta > loopDuration/2) delta -= loopDuration; if (delta < -loopDuration/2) delta += loopDuration;
+            if (Math.abs(delta) > maxHardSync) { try { videoEl.currentTime = audioPos; videoEl.play().catch(()=>{}); } catch(e){} }
+            else { const adj = 1 + delta * resyncGain; const pr = Math.max(0.93, Math.min(1.07, adj)); videoEl.playbackRate = pr; }
             rafId = requestAnimationFrame(step);
           }
-
-          return {
-            start() { if (!rafId) rafId = requestAnimationFrame(step); },
-            stop() { if (rafId) { cancelAnimationFrame(rafId); rafId = null; } }
-          };
+          return { start() { if (!rafId) rafId = requestAnimationFrame(step); }, stop() { if (rafId) { cancelAnimationFrame(rafId); rafId=null; } } };
         }
 
-        // Adapt an a-video entity to its underlying video element aspect ratio
+        // adapt video aspect
         function adaptVideoToTarget(videoEl, aVideoEntity, maxWidth = 1.0) {
-          if (!videoEl || !aVideoEntity) return;
-          if (videoEl.readyState < 1) {
-            videoEl.addEventListener('loadedmetadata', () => adaptVideoToTarget(videoEl, aVideoEntity, maxWidth), { once: true });
-            return;
-          }
-          const vw = videoEl.videoWidth || videoEl.width || 1;
-          const vh = videoEl.videoHeight || videoEl.height || 1;
-          const aspect = vw / vh;
-          const width = maxWidth;
-          const height = width / aspect;
-          try {
-            aVideoEntity.setAttribute('width', width);
-            aVideoEntity.setAttribute('height', height);
-            aVideoEntity.setAttribute('position', '0 0 0.001');
-            aVideoEntity.setAttribute('scale', '1 1 1');
-          } catch (e) { console.warn('adaptVideoToTarget failed', e); }
+          if (!videoEl || !aVideoEntity) return; if (videoEl.readyState < 1) { videoEl.addEventListener('loadedmetadata', ()=>adaptVideoToTarget(videoEl,aVideoEntity,maxWidth), { once:true }); return; }
+          const vw = videoEl.videoWidth || videoEl.width || 1; const vh = videoEl.videoHeight || videoEl.height || 1; const aspect = vw/vh; const width = maxWidth; const height = width / aspect;
+          try { aVideoEntity.setAttribute('width', width); aVideoEntity.setAttribute('height', height); aVideoEntity.setAttribute('position','0 0 0.001'); aVideoEntity.setAttribute('scale','1 1 1'); } catch (e) { console.warn('adaptVideoToTarget failed', e); }
         }
 
-        // Try to start MindAR robustly after scene load to trigger camera permission
+        // Start MindAR with preloads
         async function startMindAROnLoad() {
-          const scene = document.querySelector('a-scene');
-          if (!scene) { console.error('a-scene not found'); return; }
+          const scene = document.querySelector('a-scene'); if (!scene) { console.error('a-scene not found'); return; }
 
-          // Prime critical videos before starting camera/tracking
-          primeCriticalVideos();
+          // Improve camera quality best-effort
+          improveCameraQuality().catch(()=>{});
 
-          // Wait until scene is loaded
+          // Preload all videos sequentially in the background (but don't block camera permission)
+          const allVideoIds = mappings.map(m => m.videoId);
+          preloadAllVideosSequentially(allVideoIds, 10000, 500).then(()=>{ videosReady = true; console.log('All videos preloaded/primed'); }).catch(e=>{ videosReady=false; console.warn('preloadAllVideosSequentially error', e); });
+
+          // Wait until scene loaded
           await new Promise(res => { if (scene.hasLoaded) res(); else scene.addEventListener('loaded', res); });
 
-          // Search for an object with a start() function
-          let mindar = null;
-          const keys = [...Object.keys(scene.systems || {}), ...Object.keys(scene.components || {})];
-          for (const k of keys) {
-            const obj = (scene.systems && scene.systems[k]) || (scene.components && scene.components[k]);
-            if (obj && typeof obj.start === 'function') { mindar = obj; break; }
-          }
-
+          // find mindar system
+          let mindar = null; const keys = [...Object.keys(scene.systems||{}), ...Object.keys(scene.components||{})];
+          for (const k of keys) { const obj = (scene.systems && scene.systems[k]) || (scene.components && scene.components[k]); if (obj && typeof obj.start === 'function') { mindar = obj; break; } }
           if (!mindar) { console.error('MindAR system with start() not found'); return; }
 
-          try {
-            await mindar.start(); // triggers camera permission prompt
-            console.log('MindAR started (camera prompt shown / tracking active).');
-            attachTargetListeners();
-          } catch (err) {
-            console.error('Error starting MindAR:', err);
-          }
+          try { await mindar.start(); console.log('MindAR started'); attachTargetListeners(); } catch (err) { console.error('Error starting MindAR:', err); }
         }
 
         function attachTargetListeners() {
           mappings.forEach(map => {
-            const targetEl = document.getElementById(map.targetId);
-            const videoEl = document.getElementById(map.videoId);
-            const aVideoEntity = document.querySelector(`#${map.targetId} a-video`);
+            const targetEl = document.getElementById(map.targetId); const videoEl = document.getElementById(map.videoId); const aVideoEntity = document.querySelector(`#${map.targetId} a-video`);
             if (!targetEl || !videoEl || !aVideoEntity) return;
-
-            // adapt visual size to the video's aspect
             adaptVideoToTarget(videoEl, aVideoEntity, map.maxWidth || 1.0);
-
-            // Ensure video is paused/lazy
             try { videoEl.pause(); } catch(e){}
 
-            // When any target is found -> sync that target's video to mainAudio beat and play
             targetEl.addEventListener('targetFound', async () => {
               console.log('DEBUG: targetFound', map.targetId);
               showLoader();
               try {
-                const ready = await ensureVideoReady(videoEl, 4000);
-                const cur = (mainAudio && mainAudio.currentTime && !isNaN(mainAudio.currentTime)) ? mainAudio.currentTime : 0;
-                const audioPos = cur % (map.loopDuration || loopDuration);
+                // wait until all videos preloaded or until per-target video ready
+                if (!videosReady) {
+                  // wait a short while for global preload to finish
+                  const waitStart = performance.now();
+                  while (!videosReady && performance.now() - waitStart < 8000) { await new Promise(r=>setTimeout(r,200)); }
+                }
+                const ready = await ensureVideoReady(videoEl, 6000);
                 if (!ready) console.warn('Video not ready quickly for', map.videoId);
+
+                const cur = (mainAudio && mainAudio.currentTime && !isNaN(mainAudio.currentTime)) ? mainAudio.currentTime : 0;
+                const audioPos = cur % (map.loopDuration || defaultLoop);
                 try { videoEl.currentTime = audioPos; } catch(e) { console.warn('Could not set video currentTime', e); }
-                videoEl.playbackRate = 1;
-                try { const p = videoEl.play(); if (p && p.catch) p.catch(err => console.warn('video.play() failed', err)); } catch (e) {}
+                videoEl.playbackRate = 1; try { const p = videoEl.play(); if (p && p.catch) p.catch(err=>console.warn('video.play() failed',err)); } catch(e){}
+                if (!videoEl.__sync) videoEl.__sync = createSyncController(videoEl, map.loopDuration || defaultLoop, mainAudio); videoEl.__sync.start();
+              } catch (e) { console.warn('Error during targetFound handling', e); } finally { hideLoader(); }
 
-                // start sync controller
-                if (!videoEl.__sync) videoEl.__sync = createSyncController(videoEl, map.loopDuration || loopDuration, mainAudio);
-                videoEl.__sync.start();
-              } catch (e) {
-                console.warn('Error during targetFound handling', e);
-              } finally { hideLoader(); }
-
-              // If this is page 4_5, start/unmute mainAudio
+              // If this is page 4_5, start/unmute mainAudio only if global preload done (or after small wait)
               if (map.targetId === 'target_p4_5' && mainAudio) {
                 try {
-                  // First attempt: unmute and play
-                  mainAudio.muted = false;
-                  const ap = mainAudio.play();
-                  if (ap && ap.catch) {
-                    ap.catch(err => {
-                      console.warn('Autoplay blocked for mainAudio:', err);
-                      (async () => {
-                        try {
-                          mainAudio.muted = true;
-                          await mainAudio.play();
-                          showEnableSound(true);
-                        } catch (e) {
-                          console.warn('Playing muted mainAudio also failed:', e);
-                          showEnableSound(true);
-                        }
-                      })();
-                    });
-                  }
-                } catch (e) {
-                  console.warn('Error while attempting to start mainAudio:', e);
-                  showEnableSound(true);
-                }
+                  if (!videosReady) { console.log('Waiting for global preloads before starting mainAudio'); const waitStart = performance.now(); while (!videosReady && performance.now()-waitStart < 8000) await new Promise(r=>setTimeout(r,200)); }
+                  mainAudio.muted = false; const ap = mainAudio.play(); if (ap && ap.catch) ap.catch(err => { console.warn('Autoplay blocked for mainAudio:', err); (async ()=>{ try { mainAudio.muted = true; await mainAudio.play(); showEnableSound(true); } catch(e){ showEnableSound(true); } })(); });
+                } catch (e) { console.warn('Error while attempting to start mainAudio:', e); showEnableSound(true); }
               }
             });
 
-            targetEl.addEventListener('targetLost', () => {
-              try {
-                if (videoEl.__sync) { videoEl.__sync.stop(); }
-                videoEl.pause();
-              } catch(e){}
-            });
+            targetEl.addEventListener('targetLost', () => { try { if (videoEl.__sync) { videoEl.__sync.stop(); } videoEl.pause(); } catch(e){} });
           });
         }
 
-        // Fallback user gesture to enable sound if autoplay blocked
-        if (enableSoundBtn) enableSoundBtn.addEventListener('click', async () => {
-          try {
-            if (mainAudio) mainAudio.muted = false;
-            if (mainAudio) await mainAudio.play();
-            hideEnableSound();
-          } catch (e) {
-            console.warn('User-initiated mainAudio.play() failed', e);
-          }
-        });
+        if (enableSoundBtn) enableSoundBtn.addEventListener('click', async () => { try { if (mainAudio) mainAudio.muted=false; if (mainAudio) await mainAudio.play(); hideEnableSound(); } catch(e){ console.warn('User-initiated mainAudio.play failed', e); } });
 
-        // Pause all videos when page hidden to free memory
-        document.addEventListener('visibilitychange', () => {
-          if (document.hidden) {
-            mappings.forEach(m => {
-              const v = document.getElementById(m.videoId);
-              if (v && !v.paused) try { v.pause(); } catch(e){}
-            });
-          }
-        });
+        document.addEventListener('visibilitychange', () => { if (document.hidden) { mappings.forEach(m=>{ const v = document.getElementById(m.videoId); if (v && !v.paused) try{ v.pause(); }catch(e){} }); } });
 
-        // Debug hook
-        window.__ARC = { startMindAROnLoad, mappings, loopDuration };
-
-        // Start MindAR as early as possible after load. Small delay so mindar component registers.
-        window.addEventListener('load', () => {
-          setTimeout(startMindAROnLoad, 80);
-        });
+        window.__ARC = { startMindAROnLoad, mappings, defaultLoop };
+        window.addEventListener('load', () => { setTimeout(startMindAROnLoad, 80); });
       })();
     </script>
   </body>
