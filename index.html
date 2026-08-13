@@ -106,11 +106,27 @@
                     uniforms: {
                       texture1: { value: videoTexture },
                       keyColor: { value: new THREE.Color(self.data.color) },
-                      threshold: { value: 0.45 }
+                      threshold: { value: 0.35 },
+                      softness: { value: 0.08 },
+                      spillSuppress: { value: 0.85 }
                     },
                     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-                    fragmentShader:
-                      'precision mediump float; varying vec2 vUv; uniform sampler2D texture1; uniform vec3 keyColor; uniform float threshold; void main() { vec4 tex = texture2D(texture1, vUv); float d = distance(tex.rgb, keyColor); if (d < threshold) discard; gl_FragColor = tex; }',
+                    fragmentShader: `precision mediump float;
+varying vec2 vUv;
+uniform sampler2D texture1;
+uniform vec3 keyColor;
+uniform float threshold;
+uniform float softness;
+uniform float spillSuppress;
+void main() {
+  vec4 tex = texture2D(texture1, vUv);
+  float d = distance(tex.rgb, keyColor);
+  float alpha = smoothstep(threshold - softness, threshold + softness, d);
+  float avg = (tex.r + tex.g + tex.b) / 3.0;
+  float suppressedG = mix(tex.g, avg, spillSuppress * (1.0 - alpha));
+  vec3 finalColor = vec3(tex.r, suppressedG, tex.b);
+  gl_FragColor = vec4(finalColor, alpha);
+}`,
                     transparent: true,
                     depthTest: true,
                     side: THREE.DoubleSide
@@ -222,7 +238,7 @@
 
     <script>
       (function () {
-        const loopDuration = 4.0; // seconds (video loop length)
+        const loopDuration = 4.0; // seconds (video loop length) - adjust per video if needed
         const mainAudio = document.getElementById('mainAudio');
         const enableSoundBtn = document.getElementById('enableSound');
 
@@ -261,13 +277,72 @@
           enableSoundBtn.style.display = 'none';
         }
 
+        // Helper: wait until a video has metadata / frames available
+        function ensureVideoReady(v) {
+          return new Promise(res => {
+            if (!v) return res();
+            if (v.readyState >= 2) return res();
+            v.addEventListener('loadeddata', res, { once: true });
+            // fallback
+            setTimeout(res, 1500);
+          });
+        }
+
+        // Sync controller to keep video in time with audio master
+        function createSyncController(videoEl, loopDuration, audioEl) {
+          let rafId = null;
+          const maxHardSync = 0.12; // seconds - larger -> hard seek
+          const resyncGain = 0.35;  // playbackRate correction strength
+
+          function step() {
+            if (!videoEl || videoEl.paused || !audioEl) { rafId = requestAnimationFrame(step); return; }
+            const audioTime = audioEl.currentTime || 0;
+            const audioPos = audioTime % loopDuration;
+            const videoPos = videoEl.currentTime % loopDuration;
+            let delta = audioPos - videoPos;
+            if (delta > loopDuration / 2) delta -= loopDuration;
+            if (delta < -loopDuration / 2) delta += loopDuration;
+
+            if (Math.abs(delta) > maxHardSync) {
+              try { videoEl.currentTime = audioPos; videoEl.play().catch(()=>{}); } catch (e) {}
+            } else {
+              const adj = 1 + delta * resyncGain;
+              const pr = Math.max(0.93, Math.min(1.07, adj));
+              videoEl.playbackRate = pr;
+            }
+            rafId = requestAnimationFrame(step);
+          }
+
+          return {
+            start() { if (!rafId) rafId = requestAnimationFrame(step); },
+            stop() { if (rafId) { cancelAnimationFrame(rafId); rafId = null; } }
+          };
+        }
+
+        // Adapt an a-video entity to its underlying video element aspect ratio
+        function adaptVideoToTarget(videoEl, aVideoEntity, maxWidth = 1.0) {
+          if (!videoEl || !aVideoEntity) return;
+          if (videoEl.readyState < 1) {
+            videoEl.addEventListener('loadedmetadata', () => adaptVideoToTarget(videoEl, aVideoEntity, maxWidth), { once: true });
+            return;
+          }
+          const vw = videoEl.videoWidth || videoEl.width || 1;
+          const vh = videoEl.videoHeight || videoEl.height || 1;
+          const aspect = vw / vh;
+          const width = maxWidth;
+          const height = width / aspect;
+          try {
+            aVideoEntity.setAttribute('width', width);
+            aVideoEntity.setAttribute('height', height);
+            aVideoEntity.setAttribute('position', '0 0 0');
+            aVideoEntity.setAttribute('scale', '1 1 1');
+          } catch (e) { console.warn('adaptVideoToTarget failed', e); }
+        }
+
         // Try to start MindAR robustly after scene load to trigger camera permission
         async function startMindAROnLoad() {
           const scene = document.querySelector('a-scene');
-          if (!scene) {
-            console.error('a-scene not found');
-            return;
-          }
+          if (!scene) { console.error('a-scene not found'); return; }
 
           // Wait until scene is loaded
           await new Promise(res => { if (scene.hasLoaded) res(); else scene.addEventListener('loaded', res); });
@@ -280,10 +355,7 @@
             if (obj && typeof obj.start === 'function') { mindar = obj; break; }
           }
 
-          if (!mindar) {
-            console.error('MindAR system with start() not found');
-            return;
-          }
+          if (!mindar) { console.error('MindAR system with start() not found'); return; }
 
           try {
             await mindar.start(); // triggers camera permission prompt
@@ -298,7 +370,11 @@
           mappings.forEach(map => {
             const targetEl = document.getElementById(map.targetId);
             const videoEl = document.getElementById(map.videoId);
-            if (!targetEl || !videoEl) return;
+            const aVideoEntity = document.querySelector(`#${map.targetId} a-video`);
+            if (!targetEl || !videoEl || !aVideoEntity) return;
+
+            // adapt visual size to the video's aspect
+            adaptVideoToTarget(videoEl, aVideoEntity, 1.0);
 
             // Ensure video is paused/lazy
             try { videoEl.pause(); } catch(e){}
@@ -307,17 +383,19 @@
             targetEl.addEventListener('targetFound', async () => {
               console.log('DEBUG: targetFound', map.targetId);
               try {
+                await ensureVideoReady(videoEl);
                 const cur = (mainAudio && mainAudio.currentTime && !isNaN(mainAudio.currentTime)) ? mainAudio.currentTime : 0;
-                try { videoEl.currentTime = cur % loopDuration; } catch(e) { console.warn('Could not set video currentTime', e); }
-              } catch (e) {
-                console.warn('Could not read mainAudio currentTime', e);
-              }
+                const audioPos = cur % loopDuration;
+                try { videoEl.currentTime = audioPos; } catch(e) { console.warn('Could not set video currentTime', e); }
+                videoEl.playbackRate = 1;
+                try { const p = videoEl.play(); if (p && p.catch) p.catch(err => console.warn('video.play() failed', err)); } catch (e) {}
 
-              // Play the video (muted)
-              try {
-                const p = videoEl.play();
-                if (p && p.catch) p.catch(err => console.warn('video.play() failed', err));
-              } catch (e) { /* ignore */ }
+                // start sync controller
+                if (!videoEl.__sync) videoEl.__sync = createSyncController(videoEl, loopDuration, mainAudio);
+                videoEl.__sync.start();
+              } catch (e) {
+                console.warn('Error during targetFound handling', e);
+              }
 
               // If this is page 4_5, start/unmute mainAudio
               if (map.targetId === 'target_p4_5' && mainAudio) {
@@ -328,12 +406,10 @@
                   if (ap && ap.catch) {
                     ap.catch(err => {
                       console.warn('Autoplay blocked for mainAudio:', err);
-                      // fallback: try to play muted (to unlock audio) then show user button to unmute
                       (async () => {
                         try {
                           mainAudio.muted = true;
                           await mainAudio.play();
-                          // show button for user to enable sound
                           showEnableSound();
                         } catch (e) {
                           console.warn('Playing muted mainAudio also failed:', e);
@@ -350,7 +426,10 @@
             });
 
             targetEl.addEventListener('targetLost', () => {
-              try { videoEl.pause(); } catch(e){}
+              try {
+                if (videoEl.__sync) { videoEl.__sync.stop(); }
+                videoEl.pause();
+              } catch(e){}
             });
           });
         }
