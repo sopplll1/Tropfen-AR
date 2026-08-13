@@ -29,32 +29,50 @@
       /* Center play overlay (larger button) */
       #playOverlay { position: fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:11000; pointer-events:auto; }
       #playOverlay.hidden { display:none; }
-      #playOverlay button { pointer-events:auto; background: rgba(255,255,255,0.95); border:none; padding:26px; width:80px; height:80px; font-size:26px; border-radius:999px; cursor:pointer; box-shadow: 0 8px 24px rgba(0,0,0,0.2); display:flex; align-items:center; justify-content:center; }
+      #playOverlay button { pointer-events:auto; background: rgba(255,255,255,0.95); border:none; padding:26px; width:80px; height:80px; font-size:26px; border-radius:999px; cursor:pointer; box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
       #playOverlay svg { width:40px; height:40px; fill:#111; }
       #playOverlay button:active { transform:scale(0.97); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
       #playOverlay button:hover { box-shadow: 0 12px 32px rgba(0,0,0,0.2); }
 
-      /* Transform inspector (kept in DOM but hidden by default) */
-      #transformInspector { position: fixed; right: 12px; top: 12px; z-index: 12000; background: rgba(255,255,255,0.95); color:#111; border-radius:8px; padding:10px; font-family: sans-serif; width:260px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); display:none; }
-      #transformInspector h4 { margin: 0 0 8px 0; font-size:14px; }
-      #transformInspector label { display:block; font-size:12px; margin-top:8px; }
-      #transformInspector input[type=range] { width:100%; }
-      #transformInspector .small { font-size:11px; color:#444; }
-      #transformInspector .row { display:flex; gap:6px; }
-      #transformInspector button { margin-top:8px; padding:6px 8px; border-radius:6px; border:none; cursor:pointer; }
+      /* Control Bar (progress + page indicator) */
+      #controlBar { position: fixed; bottom: 70px; left: 12px; right: 12px; z-index: 11000; background: rgba(255,255,255,0.95); border-radius:8px; padding:12px; display:none; }
+      #controlBar.visible { display: block; }
+      #controlBar .page-info { text-align: center; color:#111; font-size:14px; font-weight:bold; margin-bottom:8px; }
+      #controlBar .progress-container { display:flex; align-items:center; gap:8px; }
+      #controlBar .progress-slider { flex:1; height:6px; background: rgba(0,0,0,0.1); border-radius:3px; cursor:pointer; -webkit-appearance: none; appearance: none; }
+      #controlBar .progress-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width:14px; height:14px; border-radius:50%; background:#4ade80; cursor:pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+      #controlBar .progress-slider::-moz-range-thumb { width:14px; height:14px; border-radius:50%; background:#4ade80; cursor:pointer; border:none; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+      #controlBar .time-display { color:#111; font-size:12px; min-width:50px; text-align:right; }
 
-      /* Mute toggle button (bottom-left) */
-      #muteToggle { position: fixed; left: 12px; bottom: 12px; z-index: 11000; background: rgba(255,255,255,0.95); border: none; border-radius:8px; padding:8px; display:flex; align-items:center; justify-content:center; width:44px; height:44px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
-      #muteToggle svg { width:20px; height:20px; fill:#111; }
+      /* Chromakey Panel */
+      #chromakeyPanel { position: fixed; right: 12px; bottom: 80px; z-index: 12000; background: rgba(255,255,255,0.95); color:#111; border-radius:8px; padding:14px; font-family: sans-serif; width:280px; display:none; max-height:80vh; overflow-y:auto; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+      #chromakeyPanel.visible { display: block; }
+      #chromakeyPanel h4 { margin: 0 0 12px 0; font-size:14px; font-weight:bold; }
+      #chromakeyPanel label { display:block; font-size:12px; margin-top:10px; }
+      #chromakeyPanel input[type=range] { width:100%; height:6px; cursor:pointer; -webkit-appearance: none; appearance: none; border-radius:3px; background: rgba(0,0,0,0.1); }
+      #chromakeyPanel input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width:14px; height:14px; border-radius:50%; background:#4ade80; cursor:pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+      #chromakeyPanel input[type=range]::-moz-range-thumb { width:14px; height:14px; border-radius:50%; background:#4ade80; cursor:pointer; border:none; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+      #chromakeyPanel .small { font-size:11px; color:#666; margin-top:3px; }
+      #chromakeyPanel .row { display:flex; gap:6px; margin-top:12px; }
+      #chromakeyPanel button { padding:7px 10px; border-radius:6px; border:1px solid #ccc; cursor:pointer; flex:1; font-size:12px; background:#fff; transition: all 0.2s; }
+      #chromakeyPanel button:hover { background:#f5f5f5; }
+      #chromakeyPanel button.active { background:#4ade80; color:#fff; border-color:#4ade80; }
 
-      /* Hide MindAR / A-Frame builtin AR/VR buttons we don't want */
+      /* Mute toggle button (much larger, bottom-left) */
+      #muteToggle { position: fixed; left: 12px; bottom: 12px; z-index: 11000; background: rgba(255,255,255,0.95); border: none; border-radius:8px; padding:14px; display:flex; align-items:center; justify-content:center; cursor:pointer; width:56px; height:56px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transition: all 0.2s; }
+      #muteToggle:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.2); }
+      #muteToggle svg { width:32px; height:32px; fill:#111; transition: opacity 0.3s; }
+      #muteToggle.muted svg { opacity:0.4; }
+      #muteToggle.muted::after { content: ''; position:absolute; width:4px; height:50px; background:#f44336; transform:rotate(-45deg); border-radius:2px; pointer-events:none; box-shadow: 0 0 4px rgba(244,67,54,0.6); }
+
+      /* Hide MindAR / A-Frame builtin UI elements */
       .mindar-ui, .a-enter-vr-button, .a-enter-vr, .a-enter-vr-button, .ar-button, .vr-button { display:none !important; }
 
       /* Scene z-index / canvas */
       a-scene { z-index: 1; }
       a-scene canvas { position: absolute; left: 0; top: 0; width: 100% !important; height: 100% !important; z-index: 1 !important; image-rendering: -webkit-optimize-contrast; }
 
-      /* Make camera preview cover the screen without extra scaling transforms (improves sharpness) */
+      /* Kamera-Video: Optimiert für Klarheit und Fullscreen */
       video[playsinline], video[webkit-playsinline] {
         position: fixed !important;
         left: 0 !important;
@@ -66,15 +84,18 @@
         object-position: center center !important;
         margin: 0 !important;
         z-index: 0 !important;
+        backface-visibility: hidden !important;
+        -webkit-backface-visibility: hidden !important;
+        image-rendering: high-quality !important;
+        image-rendering: crisp-edges !important;
       }
 
-      /* For some devices the camera is rendered as a mirrored element — ensure it fills */
-      .mindar-video { position: fixed !important; left: 0 !important; top: 0 !important; transform: none !important; width: 100% !important; height: 100% !important; object-fit: cover !important; }
+      .mindar-video { position: fixed !important; left: 0 !important; top: 0 !important; transform: none !important; width: 100% !important; height: 100% !important; object-fit: cover !important; backface-visibility: hidden !important; }
 
     </style>
 
     <script>
-      // Chromakey shader component (YCbCr + 3x3 blur + improved despill) - tuned defaults
+      // Chromakey shader component (YCbCr + 3x3 blur + improved despill) - mit dynamischen Uniforms
       (function(){
         if (!window.AFRAME) { console.warn('AFRAME not found when defining chromakey component'); return; }
         try {
@@ -88,6 +109,7 @@
             },
             init: function(){
               const el = this.el; const data = this.data; const self = this;
+              
               const attach = () => {
                 let videoEl = data.videoSelector;
                 if (!videoEl) {
@@ -125,24 +147,20 @@
                       vec2 off = vec2(float(x), float(y)) * vec2(texel, texel);
                       vec3 sYC = rgb2ycbcr(texture2D(texture1, vUv + off).rgb);
                       float sd = distance(sYC.yz, keyYC.yz);
-                      // Inverted: a = 1 - smoothstep(...) so small sd (close to key color) => a ~= 1
                       float a = 1.0 - smoothstep(threshold - softness, threshold + softness, sd);
                       sum += a;
                     }
                   }
                   float alpha = sum / 9.0;
 
-                  // despill: reduce green channel in keyed areas and desaturate slightly at edges
+                  // despill: reduce green channel in keyed areas
                   float avg = (tex.r + tex.g + tex.b) * 0.333333;
                   float suppress = clamp(spillSuppress * alpha, 0.0, 1.0);
                   float suppressedG = mix(tex.g, avg, suppress);
                   vec3 finalColor = vec3(tex.r, suppressedG, tex.b);
-                  // slightly desaturate the keyed areas to reduce green halos
                   finalColor = mix(finalColor, vec3(avg), alpha * 0.9);
 
-                  // output with inverted alpha (we want transparent where green was)
                   float outAlpha = 1.0 - alpha;
-                  // apply a small threshold to avoid very faint halos
                   if (outAlpha < 0.04) discard;
                   gl_FragColor = vec4(finalColor, outAlpha);
                 }`;
@@ -163,7 +181,6 @@
                   side: THREE.DoubleSide
                 });
 
-                // reduce green halo artifacts with alphaTest and proper settings
                 mesh.material.alphaTest = 0.04;
                 mesh.material.depthWrite = false;
                 mesh.material.premultipliedAlpha = false;
@@ -172,7 +189,6 @@
                 mesh.renderOrder = 999;
                 if (mesh.material && mesh.material.uniforms) mesh.material.uniforms.texture1.value = videoTexture;
 
-                // update texel based on metadata
                 if (videoEl.readyState >= 1) {
                   const size = Math.max(videoEl.videoWidth || 512, videoEl.videoHeight || 512);
                   mesh.material.uniforms.texel.value = 1.0 / Math.max(size, 256);
@@ -181,13 +197,12 @@
                     try { const size = Math.max(videoEl.videoWidth || 512, videoEl.videoHeight || 512); mesh.material.uniforms.texel.value = 1.0 / Math.max(size, 256); } catch(e){}
                   }, { once:true });
                 }
-
               };
               try { if (el.getObject3D && el.getObject3D('mesh')) attach(); else { el.addEventListener('loaded', attach); setTimeout(attach,300); } } catch(e){ console.error('chromakey init error', e); }
             }
           });
 
-          // Stabilize transforms: improved smoothing to reduce jitter
+          // Stabilize transforms: verbessert für Page 8-9
           AFRAME.registerComponent('stable-transform', {
             schema: { smoothing: { type: 'number', default: 0.35 } },
             init: function(){
@@ -204,13 +219,11 @@
                 this.first = false;
                 return;
               }
-              const alpha = 1 - Math.exp(-this.data.smoothing * (delta/16.666)); // frame-rate independent
+              const alpha = 1 - Math.exp(-this.data.smoothing * (delta/16.666));
 
-              // Smooth position: prev = lerp(prev, current, alpha)
               this.prevPos.lerp(obj.position, alpha);
               obj.position.copy(this.prevPos);
 
-              // Smooth rotation: prev = slerp(prev, current, alpha)
               this.prevQuat.slerp(obj.quaternion, alpha);
               obj.quaternion.copy(this.prevQuat);
             }
@@ -227,36 +240,53 @@
 
     <!-- Play overlay -->
     <div id="playOverlay" class="hidden"><button id="playButton" aria-label="Play">
-      <!-- SVG Play Icon -->
       <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
     </button></div>
 
-    <!-- Transform inspector (kept in DOM but hidden) -->
-    <div id="transformInspector">
-      <h4>AR-Adjuster <span class="small">(aktuelles Target)</span></h4>
-      <div id="ti-id" class="small">--</div>
-      <label>Pos X <input id="ti-posx" type="range" min="-1" max="1" step="0.01"></label>
-      <label>Pos Y <input id="ti-posy" type="range" min="-1" max="1" step="0.01"></label>
-      <label>Pos Z <input id="ti-posz" type="range" min="-1" max="1" step="0.01"></label>
-      <label>Rot Y <input id="ti-roty" type="range" min="-180" max="180" step="1"></label>
-      <label>Scale <input id="ti-scale" type="range" min="0.1" max="3" step="0.01"></label>
-      <div class="row"><button id="ti-reset">Reset</button><button id="ti-close">Schliessen</button></div>
+    <!-- Control Bar: Progress Slider + Page Info + Time -->
+    <div id="controlBar">
+      <div class="page-info" id="pageInfo">Seite: --</div>
+      <div class="progress-container">
+        <input id="progressSlider" class="progress-slider" type="range" min="0" max="100" value="0">
+        <div class="time-display"><span id="timeDisplay">0:00</span></div>
+      </div>
     </div>
 
-    <!-- Mute toggle -->
-    <button id="muteToggle" aria-label="Ton an/aus" title="Ton an/aus">
+    <!-- Chromakey Controls Panel -->
+    <div id="chromakeyPanel">
+      <h4>Chroma Key Anpassung</h4>
+      <label>Intensität (Threshold)
+        <input id="ck-threshold" type="range" min="0" max="0.5" step="0.01" value="0.10">
+        <div class="small" id="ck-threshold-val">0.10</div>
+      </label>
+      <label>Übergang (Softness)
+        <input id="ck-softness" type="range" min="0" max="0.2" step="0.01" value="0.04">
+        <div class="small" id="ck-softness-val">0.04</div>
+      </label>
+      <label>Grün unterdrücken (Despill)
+        <input id="ck-spill" type="range" min="0.5" max="1" step="0.01" value="0.98">
+        <div class="small" id="ck-spill-val">0.98</div>
+      </label>
+      <div class="row">
+        <button id="ck-reset">Zurücksetzen</button>
+        <button id="ck-close">Schließen</button>
+      </div>
+    </div>
+
+    <!-- Mute toggle (größer) -->
+    <button id="muteToggle" aria-label="Ton an/aus" title="Ton an/aus (lange drücken für Chromakey)">
       <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path id="muteIcon" d="M3 10v4h4l5 5V5L7 10H3z"/></svg>
     </button>
 
     <!-- Fallback button -->
     <button id="enableSound" aria-hidden="true">Ton aktivieren</button>
 
-    <!-- MindAR scene -->
-    <a-scene mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 1; uiLoading: true; uiScanning: true; uiError: true; uiTarget: true" color-space="sRGB" renderer="colorManagement: true; physicallyCorrectLights: true; antialias: true">
+    <!-- MindAR scene (UI-Elemente deaktiviert) -->
+    <a-scene mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 1; uiLoading: false; uiScanning: false; uiError: false; uiTarget: false" color-space="sRGB" renderer="colorManagement: true; physically: true; antialias: true; pixelRatio: auto" device-orientation-permission-ui="enabled: false">
       <a-assets>
         <audio id="mainAudio" src="./assets/Kompletter_song.mp3" crossorigin="anonymous" preload="auto"></audio>
 
-        <!-- Videos: preload handled by script (we keep preload attributes minimal here) -->
+        <!-- Videos -->
         <video id="vid_p1" src="./assets/Page_1.mp4" loop playsinline webkit-playsinline muted crossorigin="anonymous"></video>
         <video id="vid_p4_5" src="./assets/Page_4_5.mp4" loop playsinline webkit-playsinline muted crossorigin="anonymous"></video>
         <video id="vid_p6_7" src="./assets/Page_6_7.mp4" loop playsinline webkit-playsinline muted crossorigin="anonymous"></video>
@@ -272,11 +302,11 @@
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <!-- Targets: videos invisible until shown on scan, chromakey enabled (stable-transform moved to parent entities) -->
+      <!-- Targets mit verbesserter Stabilität -->
       <a-entity id="target_p1" mindar-image-target="targetIndex: 0" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p1" chromakey="videoSelector: #vid_p1; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
       <a-entity id="target_p4_5" mindar-image-target="targetIndex: 1" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p4_5" chromakey="videoSelector: #vid_p4_5; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
       <a-entity id="target_p6_7" mindar-image-target="targetIndex: 2" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p6_7" chromakey="videoSelector: #vid_p6_7; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
-      <a-entity id="target_p8_9" mindar-image-target="targetIndex: 3" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p8_9" chromakey="videoSelector: #vid_p8_9; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
+      <a-entity id="target_p8_9" mindar-image-target="targetIndex: 3" stable-transform="smoothing:0.45"><a-video visible="false" src="#vid_p8_9" chromakey="videoSelector: #vid_p8_9; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
       <a-entity id="target_p10_11" mindar-image-target="targetIndex: 4" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p10_11" chromakey="videoSelector: #vid_p10_11; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
       <a-entity id="target_p12_13" mindar-image-target="targetIndex: 5" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p12_13" chromakey="videoSelector: #vid_p12_13; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
       <a-entity id="target_p14_15" mindar-image-target="targetIndex: 6" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p14_15" chromakey="videoSelector: #vid_p14_15; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
@@ -296,29 +326,34 @@
         const playButton = document.getElementById('playButton');
         const enableSoundBtn = document.getElementById('enableSound');
         const muteToggle = document.getElementById('muteToggle');
+        
+        const controlBar = document.getElementById('controlBar');
+        const progressSlider = document.getElementById('progressSlider');
+        const pageInfo = document.getElementById('pageInfo');
+        const timeDisplay = document.getElementById('timeDisplay');
 
-        const inspector = document.getElementById('transformInspector');
-        const ti_id = document.getElementById('ti-id');
-        const ti_posx = document.getElementById('ti-posx');
-        const ti_posy = document.getElementById('ti-posy');
-        const ti_posz = document.getElementById('ti-posz');
-        const ti_roty = document.getElementById('ti-roty');
-        const ti_scale = document.getElementById('ti-scale');
-        const ti_reset = document.getElementById('ti-reset');
-        const ti_close = document.getElementById('ti-close');
+        const chromakeyPanel = document.getElementById('chromakeyPanel');
+        const ck_threshold = document.getElementById('ck-threshold');
+        const ck_softness = document.getElementById('ck-softness');
+        const ck_spill = document.getElementById('ck-spill');
+        const ck_threshold_val = document.getElementById('ck-threshold-val');
+        const ck_softness_val = document.getElementById('ck-softness-val');
+        const ck_spill_val = document.getElementById('ck-spill-val');
+        const ck_reset = document.getElementById('ck-reset');
+        const ck_close = document.getElementById('ck-close');
 
         const mappings = [
-          { targetId: 'target_p4_5', videoId: 'vid_p4_5' },
-          { targetId: 'target_p6_7', videoId: 'vid_p6_7' },
-          { targetId: 'target_p8_9', videoId: 'vid_p8_9' },
-          { targetId: 'target_p10_11', videoId: 'vid_p10_11' },
-          { targetId: 'target_p12_13', videoId: 'vid_p12_13' },
-          { targetId: 'target_p14_15', videoId: 'vid_p14_15' },
-          { targetId: 'target_p16_17', videoId: 'vid_p16_17' },
-          { targetId: 'target_p18_19', videoId: 'vid_p18_19' },
-          { targetId: 'target_p20_21', videoId: 'vid_p20_21' },
-          { targetId: 'target_p22_23', videoId: 'vid_p22_23' },
-          { targetId: 'target_p1', videoId: 'vid_p1' }
+          { targetId: 'target_p1', videoId: 'vid_p1', pageRange: '1' },
+          { targetId: 'target_p4_5', videoId: 'vid_p4_5', pageRange: '4-5' },
+          { targetId: 'target_p6_7', videoId: 'vid_p6_7', pageRange: '6-7' },
+          { targetId: 'target_p8_9', videoId: 'vid_p8_9', pageRange: '8-9' },
+          { targetId: 'target_p10_11', videoId: 'vid_p10_11', pageRange: '10-11' },
+          { targetId: 'target_p12_13', videoId: 'vid_p12_13', pageRange: '12-13' },
+          { targetId: 'target_p14_15', videoId: 'vid_p14_15', pageRange: '14-15' },
+          { targetId: 'target_p16_17', videoId: 'vid_p16_17', pageRange: '16-17' },
+          { targetId: 'target_p18_19', videoId: 'vid_p18_19', pageRange: '18-19' },
+          { targetId: 'target_p20_21', videoId: 'vid_p20_21', pageRange: '20-21' },
+          { targetId: 'target_p22_23', videoId: 'vid_p22_23', pageRange: '22-23' }
         ];
 
         let videosReady = false;
@@ -327,8 +362,8 @@
         let mappingData = {};
         let rafId = null;
         let audioStarted = false;
-        let currentTarget = null; // id of currently visible target
-        let transforms = JSON.parse(localStorage.getItem('tropfen.transforms') || '{}');
+        let currentTarget = null;
+        let chromakeySettings = JSON.parse(localStorage.getItem('tropfen.chromakey') || '{}');
 
         function setLoaderProgress(percentage, text){ if (loaderBar) loaderBar.style.width = (percentage*100)+'%'; if (loaderText && text) loaderText.textContent = text; }
 
@@ -380,10 +415,9 @@
         async function startMindARAfterPreload(){
           const start = performance.now(); while (!videosReady && performance.now()-start < 30000) await new Promise(r=>setTimeout(r,200));
           const scene = document.querySelector('a-scene'); if (!scene) { console.error('a-scene not found'); return; }
-          let mindar = null; const keys = [...Object.keys(scene.systems||{}), ...Object.keys(scene.components||{})]; for (const k of keys) { const obj = (scene.systems && scene.systems[k]) || (scene.components && scene.components[k]); if (obj && obj.start && typeof obj.start === 'function' && k.toLowerCase().includes('mindar')) { mindar = obj; break; } }
+          let mindar = null; const keys = [...Object.keys(scene.systems||{}), ...Object.keys(scene.components||{})]; for (const k of keys) { const obj = (scene.systems && scene.systems[k]) || (scene.components && scene.components[k]); if (obj && typeof obj.start === 'function') { mindar = obj; break; } }
           if (!mindar) { console.error('MindAR start() not found'); return; }
           try { await mindar.start(); console.log('MindAR started');
-            // Improve canvas sharpness on high-DPR devices
             try {
               if (scene.renderer && typeof scene.renderer.setPixelRatio === 'function') {
                 scene.renderer.setPixelRatio(window.devicePixelRatio || 1);
@@ -397,6 +431,25 @@
             if (!audioStarted) { rafId = requestAnimationFrame(step); return; }
             const a = mainAudio; if (!a || a.paused) { rafId = requestAnimationFrame(step); return; }
             const t = a.currentTime;
+            
+            // Update progress slider
+            const totalDuration = a.duration || 1;
+            progressSlider.value = (t / totalDuration) * 100;
+            timeDisplay.textContent = formatTime(t);
+
+            // Update page info based on current time
+            let currentPage = '--';
+            for (const m of mappings) {
+              const md = mappingData[m.videoId] || { startTime:0, duration:0 };
+              const start = md.startTime || 0; const dur = md.duration || 0;
+              if (t >= start && t < start + dur) {
+                currentPage = m.pageRange;
+                break;
+              }
+            }
+            pageInfo.textContent = `Seite: ${currentPage}`;
+
+            // Sync videos
             for (const m of mappings) {
               const v = document.getElementById(m.videoId); if (!v) continue;
               const md = mappingData[m.videoId] || { startTime:0, duration:0 };
@@ -410,13 +463,19 @@
           if (!rafId) rafId = requestAnimationFrame(step);
         }
 
-        // Show overlay when ANY target is found (do not auto-open inspector; kept in code)
+        function formatTime(seconds) {
+          if (!isFinite(seconds)) return '0:00';
+          const mins = Math.floor(seconds / 60);
+          const secs = Math.floor(seconds % 60);
+          return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
         function setupPlayOverlayForAllTargets(){
           for (const m of mappings) {
             const targetEl = document.getElementById(m.targetId);
             if (!targetEl) continue;
-            targetEl.addEventListener('targetFound', () => { if (!videosReady) return; if (!audioStarted) playOverlay.classList.remove('hidden'); currentTarget = m.targetId; });
-            targetEl.addEventListener('targetLost', () => { playOverlay.classList.add('hidden'); /* inspector left hidden */ });
+            targetEl.addEventListener('targetFound', () => { if (!videosReady) return; if (!audioStarted) playOverlay.classList.remove('hidden'); currentTarget = m.targetId; controlBar.classList.add('visible'); });
+            targetEl.addEventListener('targetLost', () => { playOverlay.classList.add('hidden'); controlBar.classList.remove('visible'); });
           }
         }
 
@@ -424,15 +483,13 @@
           if (shouldPlay) {
             playOverlay.classList.add('hidden');
             try { if (mainAudio) { mainAudio.muted = false; mainAudio.play().catch(()=>{}); } } catch(e){ console.warn('audio play failed', e); }
-            // start all videos at synced positions
             for (const m of mappings) {
               const v = document.getElementById(m.videoId); if (!v) continue;
-              try { const pos = (mainAudio && !isNaN(mainAudio.currentTime)) ? mainAudio.currentTime - (mappingData[m.videoId] && mappingData[m.videoId].startTime ? mappingData[m.videoId].startTime : 0) : 0; if (pos > 0 && Math.abs(v.currentTime - pos) > 0.2) v.currentTime = pos; v.play().catch(()=>{}); } catch(e){}
+              try { const pos = (mainAudio && !isNaN(mainAudio.currentTime)) ? mainAudio.currentTime - (mappingData[m.videoId] && mappingData[m.videoId].startTime ? mappingData[m.videoId].startTime : 0) : 0; if (pos >= 0) { v.currentTime = Math.max(0, pos); v.play().catch(()=>{}); } } catch(e){}
             }
             audioStarted = true;
             startSequenceController();
           } else {
-            // pause all
             try { if (mainAudio && !mainAudio.paused) mainAudio.pause(); } catch(e){}
             for (const m of mappings) { const v = document.getElementById(m.videoId); try { if (v && !v.paused) v.pause(); } catch(e){} }
             audioStarted = false;
@@ -440,34 +497,47 @@
           }
         }
 
-        // Click on play button starts playback
         playButton.addEventListener('click', async (ev) => {
           ev.stopPropagation();
           togglePlayback(true);
         });
 
-        // Tapping/clicking the screen when playing should pause everything and show the play overlay again
+        // Progress slider seek
+        progressSlider.addEventListener('input', (ev) => {
+          if (!mainAudio || !audioStarted) return;
+          const newTime = (parseFloat(ev.target.value) / 100) * mainAudio.duration;
+          mainAudio.currentTime = newTime;
+          
+          // Seek all videos
+          for (const m of mappings) {
+            const v = document.getElementById(m.videoId);
+            if (!v) continue;
+            const relTime = newTime - (mappingData[m.videoId] && mappingData[m.videoId].startTime ? mappingData[m.videoId].startTime : 0);
+            if (relTime >= 0) v.currentTime = relTime;
+          }
+        });
+
         document.addEventListener('click', (ev)=>{
-          // ignore clicks on overlay, inspector controls, mute button or enableSound
-          if (ev.target.closest('#playOverlay') || ev.target.closest('#transformInspector') || ev.target.closest('#enableSound') || ev.target.closest('#muteToggle')) return;
+          if (ev.target.closest('#playOverlay') || ev.target.closest('#chromakeyPanel') || ev.target.closest('#enableSound') || ev.target.closest('#muteToggle') || ev.target.closest('#controlBar')) return;
           if (audioStarted) {
             togglePlayback(false);
           }
         });
 
-        // Mute toggle handling
+        // Mute toggle with visual feedback
         function updateMuteIcon(){
           const path = document.getElementById('muteIcon');
           if (!path) return;
           if (!mainAudio) return;
           if (mainAudio.muted) {
-            // muted: show muted speaker (cross) path
+            muteToggle.classList.add('muted');
             path.setAttribute('d', 'M16.5 12c0-1.77-.77-3.36-1.98-4.47L14 8v8l.52-.53C15.73 15.36 16.5 13.77 16.5 12z M3 10v4h4l5 5V5L7 10H3z');
           } else {
-            // unmuted: show speaker
+            muteToggle.classList.remove('muted');
             path.setAttribute('d', 'M3 10v4h4l5 5V5L7 10H3z');
           }
         }
+        
         muteToggle.addEventListener('click', (ev)=>{
           ev.stopPropagation();
           if (!mainAudio) return;
@@ -477,47 +547,67 @@
 
         function showEnableSound(debug){ if (!enableSoundBtn) return; enableSoundBtn.setAttribute('aria-hidden','false'); enableSoundBtn.style.display='inline-block'; if (debug) enableSoundBtn.classList.add('debug-visible'); }
         function hideEnableSound(){ if (!enableSoundBtn) return; enableSoundBtn.setAttribute('aria-hidden','true'); enableSoundBtn.style.display='none'; enableSoundBtn.classList.remove('debug-visible'); }
-        enableSoundBtn.addEventListener('click', async ()=>{ try{ if (mainAudio) mainAudio.muted = false; if (mainAudio) await mainAudio.play(); hideEnableSound(); updateMuteIcon(); } catch(e){ console.warn(e); } });
+        enableSoundBtn.addEventListener('click', async ()=>{ try{ if (mainAudio) mainAudio.muted = false; if (mainAudio) await mainAudio.play(); hideEnableSound(); updateMuteIcon(); } catch(e){ console.warn('enable sound failed', e); } });
 
-        function applyTransformToEntity(aVideoEntity, t){
-          try {
-            if (!aVideoEntity) return;
-            if (t.position) aVideoEntity.setAttribute('position', `${t.position.x} ${t.position.y} ${t.position.z}`);
-            if (t.rotation) aVideoEntity.setAttribute('rotation', `${t.rotation.x} ${t.rotation.y} ${t.rotation.z}`);
-            if (t.scale) aVideoEntity.setAttribute('scale', `${t.scale.x} ${t.scale.y} ${t.scale.z}`);
-          } catch(e){}
-        }
+        // Chromakey panel controls
+        function updateAllChromakeyShaders() {
+          const threshold = parseFloat(ck_threshold.value);
+          const softness = parseFloat(ck_softness.value);
+          const spill = parseFloat(ck_spill.value);
 
-        function showInspectorFor(targetId){
-          const aVideoEntity = document.querySelector(`#${targetId} a-video`);
-          if (!aVideoEntity) { inspector.style.display = 'none'; return; }
-          inspector.style.display = 'block';
-          ti_id.textContent = targetId;
-          // load saved transform or defaults
-          const saved = transforms[targetId] || { position:{x:0,y:0,z:0}, rotation:{x:0,y:0,z:0}, scale:{x:1,y:1,z:1} };
-          // apply to entity
-          applyTransformToEntity(aVideoEntity, saved);
-          // populate controls
-          ti_posx.value = saved.position.x;
-          ti_posy.value = saved.position.y;
-          ti_posz.value = saved.position.z;
-          ti_roty.value = saved.rotation.y || 0;
-          ti_scale.value = saved.scale.x || 1;
-
-          // wire up listeners
-          function onChange(){
-            const t = { position:{ x: parseFloat(ti_posx.value), y: parseFloat(ti_posy.value), z: parseFloat(ti_posz.value) }, rotation:{ x:0, y: parseFloat(ti_roty.value), z:0 }, scale:{ x: parseFloat(ti_scale.value), y: parseFloat(ti_scale.value), z: parseFloat(ti_scale.value) } };
-            transforms[targetId] = t;
-            localStorage.setItem('tropfen.transforms', JSON.stringify(transforms));
-            applyTransformToEntity(aVideoEntity, t);
+          for (const m of mappings) {
+            const aVideoEntity = document.querySelector(`#${m.targetId} a-video`);
+            if (aVideoEntity) {
+              aVideoEntity.setAttribute('chromakey', `threshold: ${threshold}; softness: ${softness}; spillSuppress: ${spill}`);
+            }
           }
-          ti_posx.oninput = onChange; ti_posy.oninput = onChange; ti_posz.oninput = onChange; ti_roty.oninput = onChange; ti_scale.oninput = onChange;
 
-          ti_reset.onclick = ()=>{
-            delete transforms[targetId]; localStorage.setItem('tropfen.transforms', JSON.stringify(transforms)); showInspectorFor(targetId);
-          };
-          ti_close.onclick = ()=>{ inspector.style.display='none'; };
+          // Update display values
+          ck_threshold_val.textContent = threshold.toFixed(2);
+          ck_softness_val.textContent = softness.toFixed(2);
+          ck_spill_val.textContent = spill.toFixed(2);
+
+          // Save to localStorage
+          chromakeySettings = { threshold, softness, spill };
+          localStorage.setItem('tropfen.chromakey', JSON.stringify(chromakeySettings));
         }
+
+        ck_threshold.addEventListener('input', updateAllChromakeyShaders);
+        ck_softness.addEventListener('input', updateAllChromakeyShaders);
+        ck_spill.addEventListener('input', updateAllChromakeyShaders);
+
+        ck_reset.addEventListener('click', () => {
+          ck_threshold.value = 0.10;
+          ck_softness.value = 0.04;
+          ck_spill.value = 0.98;
+          updateAllChromakeyShaders();
+        });
+
+        ck_close.addEventListener('click', () => {
+          chromakeyPanel.classList.remove('visible');
+        });
+
+        // Long-press mute button to toggle chromakey panel
+        let muteLongPressTimer = null;
+        muteToggle.addEventListener('mousedown', () => {
+          muteLongPressTimer = setTimeout(() => {
+            chromakeyPanel.classList.toggle('visible');
+          }, 1500);
+        });
+        muteToggle.addEventListener('mouseup', () => {
+          clearTimeout(muteLongPressTimer);
+        });
+        muteToggle.addEventListener('mouseleave', () => {
+          clearTimeout(muteLongPressTimer);
+        });
+        muteToggle.addEventListener('touchstart', () => {
+          muteLongPressTimer = setTimeout(() => {
+            chromakeyPanel.classList.toggle('visible');
+          }, 1500);
+        });
+        muteToggle.addEventListener('touchend', () => {
+          clearTimeout(muteLongPressTimer);
+        });
 
         function attachVisibilityHandlers(){
           for (const m of mappings) {
@@ -526,17 +616,13 @@
             const v = document.getElementById(m.videoId);
             if (!targetEl || !aVideoEntity) continue;
 
-            // Ensure A-Frame video plane uses a transparent material so shader alpha works
             try {
               aVideoEntity.setAttribute('material', `shader: flat; transparent: true; side:double`);
-              // apply saved transform if present so user adjustments persist
-              const saved = transforms[m.targetId];
-              if (saved) applyTransformToEntity(aVideoEntity, saved);
               if (v && v.videoWidth && v.videoHeight) {
                 const aspect = (v.videoHeight / v.videoWidth) || 1;
                 aVideoEntity.setAttribute('geometry', `primitive: plane; width: 1; height: ${aspect}`);
               }
-            } catch(e){ /* ignore */ }
+            } catch(e){ }
 
             targetEl.addEventListener('targetFound', () => { aVideoEntity.setAttribute('visible','true'); });
             targetEl.addEventListener('targetLost', () => { aVideoEntity.setAttribute('visible','false'); });
@@ -544,10 +630,16 @@
         }
 
         window.addEventListener('load', async ()=>{
-          if (loader) loader.classList.remove('hidden'); setLoaderProgress(0,'Starte Laden...'); await preloadAllVideos(); await startMindARAfterPreload(); attachVisibilityHandlers(); setupPlayOverlayForAllTargets(); updateMuteIcon();
+          if (loader) loader.classList.remove('hidden'); setLoaderProgress(0,'Starte Laden...'); await preloadAllVideos(); await startMindARAfterPreload(); attachVisibilityHandlers(); setupPlayOverlayForAllTargets();
+          
+          // Restore chromakey settings
+          if (chromakeySettings.threshold) ck_threshold.value = chromakeySettings.threshold;
+          if (chromakeySettings.softness) ck_softness.value = chromakeySettings.softness;
+          if (chromakeySettings.spill) ck_spill.value = chromakeySettings.spill;
+          updateAllChromakeyShaders();
         });
 
-        window.__TROPFEN = { mappings, mappingData, get videosReady(){ return videosReady; }, get audioStarted(){ return audioStarted; }, transforms };
+        window.__TROPFEN = { mappings, mappingData, get videosReady(){ return videosReady; }, get audioStarted(){ return audioStarted; }, get chromakeySettings(){ return chromakeySettings; } };
       })();
     </script>
   </body>
