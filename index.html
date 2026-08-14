@@ -72,15 +72,7 @@
       .a-enter-ar, .a-enter-ar-button,
       .a-enter-xr, .a-enter-xr-button,
       .ar-button, .vr-button, .xr-button,
-<<<<<<< HEAD
       .a-orientation-modal
-=======
-      .a-orientation-modal,
-      .a-fullscreen,
-      a-scene .a-enter-vr,
-      a-scene .a-enter-ar,
-      [class*="enter-vr"], [class*="enter-ar"], [class*="enter-xr"]
->>>>>>> 92f23e7d09d3a284035614a60ed9245a894621e8
       { display:none !important; visibility:hidden !important; pointer-events:none !important; }
 
       /* Scene z-index / canvas */
@@ -317,7 +309,7 @@
     <button id="enableSound" aria-hidden="true">Ton aktivieren</button>
 
     <!-- MindAR scene (UI-Elemente deaktiviert) -->
-    <a-scene mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 1; uiLoading: false; uiScanning: false; uiError: false; uiTarget: false" color-space="sRGB" renderer="colorManagement: true; physically: true; antialias: true; pixelRatio: auto" device-orientation-permission-ui="enabled: false">
+    <a-scene mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 1; uiLoading: false; uiScanning: false; uiError: false; uiTarget: false" color-space="sRGB" renderer="colorManagement: true; physically: true; antialias: true; pixelRatio: auto" device-orientation-permission-ui="enabled: false" vr-mode-ui="enabled: false">
       <a-assets>
         <audio id="mainAudio" src="./assets/Kompletter_song.mp3" crossorigin="anonymous" preload="auto"></audio>
 
@@ -432,9 +424,11 @@
           } catch(e){ return 0; }
         }
 
-        // Wartet bis ein Video WIRKLICH vollständig gepuffert ist (nicht nur "kann anfangen abzuspielen"),
-        // meldet laufend den Fortschritt und versucht bei Bedarf automatisch neu zu laden.
-        function waitForFullBuffer(v, videoId, timeoutMs=90000){
+        // Wartet bis ein Video flüssig abspielbar ist (readyState >= 3 = genug Daten für unterbrechungsfreies
+        // Abspielen ab dem aktuellen Punkt). Das ist bewusst NICHT "100% der Datei heruntergeladen" -
+        // darauf zu warten kann bei größeren Dateien/langsamerer Verbindung sehr lange dauern oder nie
+        // eintreten. Der Fortschrittsbalken zeigt trotzdem den echten Puffer-Fortschritt an.
+        function waitUntilPlayable(v, videoId, timeoutMs=20000){
           return new Promise((resolve) => {
             let settled = false;
             let poll = null;
@@ -442,25 +436,26 @@
               if (settled) return; settled = true;
               clearInterval(poll);
               v.removeEventListener('progress', onProgress);
+              v.removeEventListener('canplay', onCanPlay);
               v.removeEventListener('error', onError);
               resolve(ok);
             };
             const onProgress = () => {
               videoProgress[videoId] = bufferedFractionOf(v);
               updateAggregateProgress();
-              if (v.readyState >= 4 && videoProgress[videoId] >= 0.995) finish(true);
             };
-            const onError = () => { console.warn('Video-Ladefehler', videoId, v.error); };
+            const onCanPlay = () => { if (v.readyState >= 3) finish(true); };
+            const onError = () => { console.warn('Video-Ladefehler', videoId, v.error); finish(false); };
 
             v.addEventListener('progress', onProgress);
+            v.addEventListener('canplay', onCanPlay);
             v.addEventListener('error', onError);
 
-            // Direkter Poll zusätzlich zu 'progress', da manche Browser das Event selten feuern
             poll = setInterval(() => {
               videoProgress[videoId] = bufferedFractionOf(v);
               updateAggregateProgress();
-              if (v.readyState >= 4 && videoProgress[videoId] >= 0.995) finish(true);
-            }, 400);
+              if (v.readyState >= 3) finish(true);
+            }, 300);
 
             setTimeout(() => finish(false), timeoutMs);
           });
@@ -473,17 +468,20 @@
           videoProgress[m.videoId] = 0;
           v.load();
 
-          const complete = await waitForFullBuffer(v, m.videoId, 90000);
+          const playable = await waitUntilPlayable(v, m.videoId, 20000);
 
-          if (!complete && attempt < 3) {
-            console.warn(`Video ${m.videoId} nicht vollständig geladen, Versuch ${attempt+1}/3…`);
-            setLoaderProgress(videoProgress[m.videoId] || 0, `${m.videoId}: erneuter Ladeversuch (${attempt+1}/3)`);
+          if (!playable && attempt < 2) {
+            console.warn(`Video ${m.videoId} noch nicht bereit, einmaliger erneuter Versuch…`);
+            setLoaderProgress(videoProgress[m.videoId] || 0, `${m.videoId}: erneuter Ladeversuch…`);
             v.load();
             return loadVideoFully(m, attempt + 1);
           }
-          if (!complete) {
-            console.warn(`Video ${m.videoId} konnte nach mehreren Versuchen nicht vollständig geladen werden, fahre trotzdem fort.`);
+          if (!playable) {
+            console.warn(`Video ${m.videoId} konnte nicht rechtzeitig geladen werden, fahre trotzdem fort (lädt im Hintergrund weiter).`);
           }
+          // Sicherstellen, dass Video weiter im Hintergrund puffert, auch wenn wir schon weitermachen
+          videoProgress[m.videoId] = Math.max(videoProgress[m.videoId] || 0, playable ? 1 : videoProgress[m.videoId] || 0);
+          updateAggregateProgress();
 
           const dur = (v.duration && !isNaN(v.duration) && isFinite(v.duration)) ? v.duration : 0;
           mappingData[m.videoId] = { duration: dur || 0, startTime: 0 };
@@ -496,6 +494,7 @@
 
           for (const m of mappings) {
             try { await loadVideoFully(m); } catch(e){ console.warn('preload error', m.videoId, e); }
+
             preloadedCount++;
           }
 
