@@ -65,8 +65,19 @@
       #muteToggle.muted svg { opacity:0.4; }
       #muteToggle.muted::after { content: ''; position:absolute; width:4px; height:50px; background:#f44336; transform:rotate(-45deg); border-radius:2px; pointer-events:none; box-shadow: 0 0 4px rgba(244,67,54,0.6); }
 
-      /* Hide MindAR / A-Frame builtin UI elements */
-      .mindar-ui, .a-enter-vr-button, .a-enter-vr, .a-enter-vr-button, .ar-button, .vr-button { display:none !important; }
+      /* Hide MindAR / A-Frame builtin UI elements - inkl. der separaten AR-Enter-Buttons (rechts unten),
+         die bei neueren A-Frame Versionen NICHT von .a-enter-vr-button abgedeckt werden */
+      .mindar-ui,
+      .a-enter-vr, .a-enter-vr-button,
+      .a-enter-ar, .a-enter-ar-button,
+      .a-enter-xr, .a-enter-xr-button,
+      .ar-button, .vr-button, .xr-button,
+      .a-orientation-modal,
+      .a-fullscreen,
+      a-scene .a-enter-vr,
+      a-scene .a-enter-ar,
+      [class*="enter-vr"], [class*="enter-ar"], [class*="enter-xr"]
+      { display:none !important; visibility:hidden !important; pointer-events:none !important; }
 
       /* Scene z-index / canvas */
       a-scene { z-index: 1; }
@@ -393,35 +404,95 @@
         let controlBarShown = false;
         let chromakeySettings = JSON.parse(localStorage.getItem('tropfen.chromakey') || '{}');
 
+        // Fortschritt pro Video (0..1), wird von waitForFullBuffer laufend aktualisiert und von
+        // updateAggregateProgress zu einer Gesamt-Ladeanzeige zusammengefasst.
+        const videoProgress = {};
+
         function setLoaderProgress(percentage, text){ if (loaderBar) loaderBar.style.width = (percentage*100)+'%'; if (loaderText && text) loaderText.textContent = text; }
 
-        function ensureVideoReady(v, timeout=12000){
-          return new Promise(res => {
-            if (!v) return res(false);
-            if (v.readyState >= 3) return res(true);
-            let done = false;
-            const ok = () => { if (done) return; done = true; clearTimeout(t); res(true); };
-            v.addEventListener('canplay', ok, { once:true });
-            v.addEventListener('canplaythrough', ok, { once:true });
-            const t = setTimeout(()=>{ if (!done) { done = true; res(false); } }, timeout);
+        function updateAggregateProgress(extraLabel){
+          const values = mappings.map(m => videoProgress[m.videoId] || 0);
+          const total = values.reduce((a,b)=>a+b, 0) / mappings.length;
+          setLoaderProgress(total, extraLabel || `Lade Videos… ${Math.round(total*100)}%`);
+        }
+
+        function bufferedFractionOf(v){
+          try {
+            if (!v.duration || !isFinite(v.duration) || v.duration <= 0) return 0;
+            const b = v.buffered;
+            if (!b || b.length === 0) return 0;
+            // Nimm den Bereich, der bei Zeit 0 beginnt (das ist der relevante für sequenzielles Abspielen)
+            let end = 0;
+            for (let i=0;i<b.length;i++){ if (b.start(i) <= 0.05) { end = Math.max(end, b.end(i)); } }
+            return Math.min(1, end / v.duration);
+          } catch(e){ return 0; }
+        }
+
+        // Wartet bis ein Video WIRKLICH vollständig gepuffert ist (nicht nur "kann anfangen abzuspielen"),
+        // meldet laufend den Fortschritt und versucht bei Bedarf automatisch neu zu laden.
+        function waitForFullBuffer(v, videoId, timeoutMs=90000){
+          return new Promise((resolve) => {
+            let settled = false;
+            let poll = null;
+            const finish = (ok) => {
+              if (settled) return; settled = true;
+              clearInterval(poll);
+              v.removeEventListener('progress', onProgress);
+              v.removeEventListener('error', onError);
+              resolve(ok);
+            };
+            const onProgress = () => {
+              videoProgress[videoId] = bufferedFractionOf(v);
+              updateAggregateProgress();
+              if (v.readyState >= 4 && videoProgress[videoId] >= 0.995) finish(true);
+            };
+            const onError = () => { console.warn('Video-Ladefehler', videoId, v.error); };
+
+            v.addEventListener('progress', onProgress);
+            v.addEventListener('error', onError);
+
+            // Direkter Poll zusätzlich zu 'progress', da manche Browser das Event selten feuern
+            poll = setInterval(() => {
+              videoProgress[videoId] = bufferedFractionOf(v);
+              updateAggregateProgress();
+              if (v.readyState >= 4 && videoProgress[videoId] >= 0.995) finish(true);
+            }, 400);
+
+            setTimeout(() => finish(false), timeoutMs);
           });
+        }
+
+        async function loadVideoFully(m, attempt=1){
+          const v = document.getElementById(m.videoId);
+          if (!v) { videoProgress[m.videoId] = 1; return; }
+          v.preload = 'auto'; v.playsInline = true; v.setAttribute('webkit-playsinline',''); v.crossOrigin = 'anonymous';
+          videoProgress[m.videoId] = 0;
+          v.load();
+
+          const complete = await waitForFullBuffer(v, m.videoId, 90000);
+
+          if (!complete && attempt < 3) {
+            console.warn(`Video ${m.videoId} nicht vollständig geladen, Versuch ${attempt+1}/3…`);
+            setLoaderProgress(videoProgress[m.videoId] || 0, `${m.videoId}: erneuter Ladeversuch (${attempt+1}/3)`);
+            v.load();
+            return loadVideoFully(m, attempt + 1);
+          }
+          if (!complete) {
+            console.warn(`Video ${m.videoId} konnte nach mehreren Versuchen nicht vollständig geladen werden, fahre trotzdem fort.`);
+          }
+
+          const dur = (v.duration && !isNaN(v.duration) && isFinite(v.duration)) ? v.duration : 0;
+          mappingData[m.videoId] = { duration: dur || 0, startTime: 0 };
+          try { v.muted = true; await v.play(); v.pause(); v.currentTime = 0; } catch(e){}
         }
 
         async function preloadAllVideos(){
           preloadedCount = 0; mappingData = {};
+          for (const m of mappings) videoProgress[m.videoId] = 0;
+
           for (const m of mappings) {
-            const v = document.getElementById(m.videoId);
-            if (!v) { preloadedCount++; setLoaderProgress(preloadedCount/totalVideos, `Fehlt: ${m.videoId}`); continue; }
-            try {
-              v.preload = 'auto'; v.playsInline = true; v.setAttribute('webkit-playsinline',''); v.crossOrigin = 'anonymous'; v.load();
-              const ready = await ensureVideoReady(v, 12000);
-              if (!ready) console.warn('Video not ready quickly', m.videoId);
-              const dur = (v.duration && !isNaN(v.duration) && isFinite(v.duration)) ? v.duration : 0;
-              mappingData[m.videoId] = { duration: dur || 0, startTime: 0 };
-              try { v.muted = true; await v.play(); v.pause(); v.currentTime = 0; } catch(e){}
-            } catch(e){ console.warn('preload error', m.videoId, e); }
-            preloadedCount++; setLoaderProgress(preloadedCount/totalVideos, `Lade ${preloadedCount}/${totalVideos}`);
-            await new Promise(r=>setTimeout(r, 300));
+            try { await loadVideoFully(m); } catch(e){ console.warn('preload error', m.videoId, e); }
+            preloadedCount++;
           }
 
           // second pass for missing durations
@@ -690,8 +761,20 @@
           }
         }
 
+        // Entfernt AR/VR/XR-Enter-Buttons aktiv aus dem DOM, falls A-Frame sie per Inline-Style
+        // wieder sichtbar macht (die CSS-Regel allein reicht bei manchen A-Frame Versionen nicht).
+        function removeXrButtons(){
+          const selectors = '.a-enter-vr, .a-enter-vr-button, .a-enter-ar, .a-enter-ar-button, .a-enter-xr, .a-enter-xr-button, [class*="enter-vr"], [class*="enter-ar"], [class*="enter-xr"]';
+          document.querySelectorAll(selectors).forEach(el => el.remove());
+        }
+
         window.addEventListener('load', async ()=>{
           if (loader) loader.classList.remove('hidden'); setLoaderProgress(0,'Starte Laden...'); await preloadAllVideos(); await startMindARAfterPreload(); attachVisibilityHandlers(); setupPlayOverlayForAllTargets();
+          removeXrButtons();
+          setTimeout(removeXrButtons, 1000);
+          setTimeout(removeXrButtons, 3000);
+          const scene = document.querySelector('a-scene');
+          if (scene) scene.addEventListener('loaded', removeXrButtons);
 
           // Restore chromakey settings
           if (chromakeySettings.threshold !== undefined) ck_threshold.value = chromakeySettings.threshold;
