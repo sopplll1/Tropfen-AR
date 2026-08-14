@@ -27,22 +27,22 @@
       #arLoader .progress > i { display:block; height:100%; background: linear-gradient(90deg,#4ade80,#06b6d4); width:0%; }
 
       /* Center play overlay (larger button) */
-      #playOverlay { position: fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:11000; pointer-events:auto; }
+      #playOverlay { position: fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:11000; pointer-events:none; }
       #playOverlay.hidden { display:none; }
       #playOverlay button { pointer-events:auto; background: rgba(255,255,255,0.95); border:none; padding:26px; width:80px; height:80px; font-size:26px; border-radius:999px; cursor:pointer; box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
       #playOverlay svg { width:40px; height:40px; fill:#111; }
       #playOverlay button:active { transform:scale(0.97); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
       #playOverlay button:hover { box-shadow: 0 12px 32px rgba(0,0,0,0.2); }
 
-      /* Control Bar (progress + page indicator) */
-      #controlBar { position: fixed; bottom: 70px; left: 12px; right: 12px; z-index: 11000; background: rgba(255,255,255,0.95); border-radius:8px; padding:12px; display:none; }
+      /* Control Bar (progress + page indicator) - jetzt größer & bleibt sichtbar */
+      #controlBar { position: fixed; bottom: 90px; left: 10px; right: 10px; z-index: 11500; background: rgba(255,255,255,0.97); border-radius:14px; padding:16px 18px 14px; display:none; box-shadow: 0 6px 20px rgba(0,0,0,0.25); }
       #controlBar.visible { display: block; }
-      #controlBar .page-info { text-align: center; color:#111; font-size:14px; font-weight:bold; margin-bottom:8px; }
-      #controlBar .progress-container { display:flex; align-items:center; gap:8px; }
-      #controlBar .progress-slider { flex:1; height:6px; background: rgba(0,0,0,0.1); border-radius:3px; cursor:pointer; -webkit-appearance: none; appearance: none; }
-      #controlBar .progress-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width:14px; height:14px; border-radius:50%; background:#4ade80; cursor:pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
-      #controlBar .progress-slider::-moz-range-thumb { width:14px; height:14px; border-radius:50%; background:#4ade80; cursor:pointer; border:none; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
-      #controlBar .time-display { color:#111; font-size:12px; min-width:50px; text-align:right; }
+      #controlBar .page-info { text-align: center; color:#111; font-size:18px; font-weight:bold; margin-bottom:10px; }
+      #controlBar .progress-container { display:flex; align-items:center; gap:10px; }
+      #controlBar .progress-slider { flex:1; height:10px; background: rgba(0,0,0,0.12); border-radius:5px; cursor:pointer; -webkit-appearance: none; appearance: none; }
+      #controlBar .progress-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width:24px; height:24px; border-radius:50%; background:#4ade80; cursor:pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 3px solid #fff; }
+      #controlBar .progress-slider::-moz-range-thumb { width:24px; height:24px; border-radius:50%; background:#4ade80; cursor:pointer; border: 3px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+      #controlBar .time-display { color:#111; font-size:15px; min-width:60px; text-align:right; font-weight:600; }
 
       /* Chromakey Panel */
       #chromakeyPanel { position: fixed; right: 12px; bottom: 80px; z-index: 12000; background: rgba(255,255,255,0.95); color:#111; border-radius:8px; padding:14px; font-family: sans-serif; width:280px; display:none; max-height:80vh; overflow-y:auto; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
@@ -95,21 +95,23 @@
     </style>
 
     <script>
-      // Chromakey shader component (YCbCr + 3x3 blur + improved despill) - mit dynamischen Uniforms
+      // Chromakey shader component (YCbCr + 5x5 blur + Erode + Rand-Crop + hartes Alpha)
       (function(){
         if (!window.AFRAME) { console.warn('AFRAME not found when defining chromakey component'); return; }
         try {
           AFRAME.registerComponent('chromakey', {
             schema: {
               color: { type: 'color', default: '#00FF00' },
-              threshold: { type: 'number', default: 0.10 },
-              softness: { type: 'number', default: 0.04 },
-              spillSuppress: { type: 'number', default: 0.98 },
+              threshold: { type: 'number', default: 0.12 },
+              softness: { type: 'number', default: 0.05 },
+              spillSuppress: { type: 'number', default: 0.92 },
+              edgeCrop: { type: 'number', default: 0.02 },
+              edgeErode: { type: 'number', default: 0.15 },
               videoSelector: { type: 'selector', default: null }
             },
             init: function(){
               const el = this.el; const data = this.data; const self = this;
-              
+
               const attach = () => {
                 let videoEl = data.videoSelector;
                 if (!videoEl) {
@@ -124,7 +126,7 @@
 
                 const mesh = el.getObject3D('mesh'); if (!mesh) { setTimeout(attach,200); return; }
 
-                const fragment = `precision mediump float; varying vec2 vUv; uniform sampler2D texture1; uniform vec3 keyColor; uniform float threshold; uniform float softness; uniform float spillSuppress; uniform float texel;
+                const fragment = `precision mediump float; varying vec2 vUv; uniform sampler2D texture1; uniform vec3 keyColor; uniform float threshold; uniform float softness; uniform float spillSuppress; uniform float texel; uniform float edgeCrop; uniform float edgeErode;
 
                 vec3 rgb2ycbcr(vec3 c) {
                   float y  =  0.299*c.r + 0.587*c.g + 0.114*c.b;
@@ -133,36 +135,44 @@
                   return vec3(y, cb, cr);
                 }
 
+                float keyness(vec3 rgb, vec3 keyYC) {
+                  vec3 pixYC = rgb2ycbcr(rgb);
+                  float d = distance(pixYC.yz, keyYC.yz);
+                  return 1.0 - smoothstep(threshold - softness, threshold + softness, d);
+                }
+
                 void main(){
+                  // 1) Rand zuschneiden - entfernt den Streifen mit eingebranntem Grün am Video-Rand
+                  if (vUv.x < edgeCrop || vUv.x > 1.0 - edgeCrop || vUv.y < edgeCrop || vUv.y > 1.0 - edgeCrop) discard;
+
                   vec4 tex = texture2D(texture1, vUv);
                   vec3 keyYC = rgb2ycbcr(keyColor);
-                  vec3 pixYC = rgb2ycbcr(tex.rgb);
-                  float d = distance(pixYC.yz, keyYC.yz);
-                  float base = smoothstep(threshold - softness, threshold + softness, d);
 
-                  // 3x3 box blur on alpha
-                  float sum = 0.0;
-                  for(int x=-1; x<=1; x++){
-                    for(int y=-1; y<=1; y++){
+                  // 2) 5x5 Blur der Keyness-Maske - glättet Kompressionsartefakte am Rand
+                  float sum = 0.0; float count = 0.0;
+                  for (int x = -2; x <= 2; x++) {
+                    for (int y = -2; y <= 2; y++) {
                       vec2 off = vec2(float(x), float(y)) * vec2(texel, texel);
-                      vec3 sYC = rgb2ycbcr(texture2D(texture1, vUv + off).rgb);
-                      float sd = distance(sYC.yz, keyYC.yz);
-                      float a = 1.0 - smoothstep(threshold - softness, threshold + softness, sd);
-                      sum += a;
+                      sum += keyness(texture2D(texture1, vUv + off).rgb, keyYC);
+                      count += 1.0;
                     }
                   }
-                  float alpha = sum / 9.0;
+                  float blurredKeyness = sum / count;
 
-                  // despill: reduce green channel in keyed areas
+                  // 3) Erode - zieht die sichtbare Kante nach innen und frisst den halbgrünen Saum komplett auf
+                  float foreground = 1.0 - smoothstep(edgeErode, edgeErode + 0.12, blurredKeyness);
+
+                  // 4) Hartes Alpha statt weichem Übergang - kein grün durchscheinender Rand mehr möglich
+                  if (foreground < 0.5) discard;
+
+                  // 5) Despill auf den verbleibenden, sicher soliden Pixeln
+                  float rawKeyness = keyness(tex.rgb, keyYC);
                   float avg = (tex.r + tex.g + tex.b) * 0.333333;
-                  float suppress = clamp(spillSuppress * alpha, 0.0, 1.0);
+                  float suppress = clamp(spillSuppress * rawKeyness, 0.0, 1.0);
                   float suppressedG = mix(tex.g, avg, suppress);
                   vec3 finalColor = vec3(tex.r, suppressedG, tex.b);
-                  finalColor = mix(finalColor, vec3(avg), alpha * 0.9);
 
-                  float outAlpha = 1.0 - alpha;
-                  if (outAlpha < 0.04) discard;
-                  gl_FragColor = vec4(finalColor, outAlpha);
+                  gl_FragColor = vec4(finalColor, 1.0);
                 }`;
 
                 mesh.material = new THREE.ShaderMaterial({
@@ -172,6 +182,8 @@
                     threshold: { value: data.threshold },
                     softness: { value: data.softness },
                     spillSuppress: { value: data.spillSuppress },
+                    edgeCrop: { value: data.edgeCrop },
+                    edgeErode: { value: data.edgeErode },
                     texel: { value: 1.0 / 512.0 }
                   },
                   vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
@@ -256,16 +268,24 @@
     <div id="chromakeyPanel">
       <h4>Chroma Key Anpassung</h4>
       <label>Intensität (Threshold)
-        <input id="ck-threshold" type="range" min="0" max="0.5" step="0.01" value="0.10">
-        <div class="small" id="ck-threshold-val">0.10</div>
+        <input id="ck-threshold" type="range" min="0" max="0.5" step="0.01" value="0.12">
+        <div class="small" id="ck-threshold-val">0.12</div>
       </label>
       <label>Übergang (Softness)
-        <input id="ck-softness" type="range" min="0" max="0.2" step="0.01" value="0.04">
-        <div class="small" id="ck-softness-val">0.04</div>
+        <input id="ck-softness" type="range" min="0" max="0.2" step="0.01" value="0.05">
+        <div class="small" id="ck-softness-val">0.05</div>
       </label>
       <label>Grün unterdrücken (Despill)
-        <input id="ck-spill" type="range" min="0.5" max="1" step="0.01" value="0.98">
-        <div class="small" id="ck-spill-val">0.98</div>
+        <input id="ck-spill" type="range" min="0.5" max="1" step="0.01" value="0.92">
+        <div class="small" id="ck-spill-val">0.92</div>
+      </label>
+      <label>Rand zuschneiden (Crop)
+        <input id="ck-edgecrop" type="range" min="0" max="0.1" step="0.005" value="0.02">
+        <div class="small" id="ck-edgecrop-val">0.02</div>
+      </label>
+      <label>Kante einfressen (Erode)
+        <input id="ck-erode" type="range" min="0" max="0.6" step="0.01" value="0.15">
+        <div class="small" id="ck-erode-val">0.15</div>
       </label>
       <div class="row">
         <button id="ck-reset">Zurücksetzen</button>
@@ -303,17 +323,17 @@
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
       <!-- Targets mit verbesserter Stabilität -->
-      <a-entity id="target_p1" mindar-image-target="targetIndex: 0" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p1" chromakey="videoSelector: #vid_p1; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
-      <a-entity id="target_p4_5" mindar-image-target="targetIndex: 1" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p4_5" chromakey="videoSelector: #vid_p4_5; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
-      <a-entity id="target_p6_7" mindar-image-target="targetIndex: 2" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p6_7" chromakey="videoSelector: #vid_p6_7; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
-      <a-entity id="target_p8_9" mindar-image-target="targetIndex: 3" stable-transform="smoothing:0.45"><a-video visible="false" src="#vid_p8_9" chromakey="videoSelector: #vid_p8_9; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
-      <a-entity id="target_p10_11" mindar-image-target="targetIndex: 4" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p10_11" chromakey="videoSelector: #vid_p10_11; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
-      <a-entity id="target_p12_13" mindar-image-target="targetIndex: 5" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p12_13" chromakey="videoSelector: #vid_p12_13; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
-      <a-entity id="target_p14_15" mindar-image-target="targetIndex: 6" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p14_15" chromakey="videoSelector: #vid_p14_15; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
-      <a-entity id="target_p16_17" mindar-image-target="targetIndex: 7" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p16_17" chromakey="videoSelector: #vid_p16_17; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
-      <a-entity id="target_p18_19" mindar-image-target="targetIndex: 8" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p18_19" chromakey="videoSelector: #vid_p18_19; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
-      <a-entity id="target_p20_21" mindar-image-target="targetIndex: 9" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p20_21" chromakey="videoSelector: #vid_p20_21; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
-      <a-entity id="target_p22_23" mindar-image-target="targetIndex: 10" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p22_23" chromakey="videoSelector: #vid_p22_23; color: #00FF00; threshold: 0.10; softness: 0.04; spillSuppress: 0.98"></a-video></a-entity>
+      <a-entity id="target_p1" mindar-image-target="targetIndex: 0" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p1" chromakey="videoSelector: #vid_p1; color: #00FF00; threshold: 0.12; softness: 0.05; spillSuppress: 0.92; edgeCrop: 0.02; edgeErode: 0.15"></a-video></a-entity>
+      <a-entity id="target_p4_5" mindar-image-target="targetIndex: 1" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p4_5" chromakey="videoSelector: #vid_p4_5; color: #00FF00; threshold: 0.12; softness: 0.05; spillSuppress: 0.92; edgeCrop: 0.02; edgeErode: 0.15"></a-video></a-entity>
+      <a-entity id="target_p6_7" mindar-image-target="targetIndex: 2" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p6_7" chromakey="videoSelector: #vid_p6_7; color: #00FF00; threshold: 0.12; softness: 0.05; spillSuppress: 0.92; edgeCrop: 0.02; edgeErode: 0.15"></a-video></a-entity>
+      <a-entity id="target_p8_9" mindar-image-target="targetIndex: 3" stable-transform="smoothing:0.45"><a-video visible="false" src="#vid_p8_9" chromakey="videoSelector: #vid_p8_9; color: #00FF00; threshold: 0.12; softness: 0.05; spillSuppress: 0.92; edgeCrop: 0.02; edgeErode: 0.15"></a-video></a-entity>
+      <a-entity id="target_p10_11" mindar-image-target="targetIndex: 4" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p10_11" chromakey="videoSelector: #vid_p10_11; color: #00FF00; threshold: 0.12; softness: 0.05; spillSuppress: 0.92; edgeCrop: 0.02; edgeErode: 0.15"></a-video></a-entity>
+      <a-entity id="target_p12_13" mindar-image-target="targetIndex: 5" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p12_13" chromakey="videoSelector: #vid_p12_13; color: #00FF00; threshold: 0.12; softness: 0.05; spillSuppress: 0.92; edgeCrop: 0.02; edgeErode: 0.15"></a-video></a-entity>
+      <a-entity id="target_p14_15" mindar-image-target="targetIndex: 6" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p14_15" chromakey="videoSelector: #vid_p14_15; color: #00FF00; threshold: 0.12; softness: 0.05; spillSuppress: 0.92; edgeCrop: 0.02; edgeErode: 0.15"></a-video></a-entity>
+      <a-entity id="target_p16_17" mindar-image-target="targetIndex: 7" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p16_17" chromakey="videoSelector: #vid_p16_17; color: #00FF00; threshold: 0.12; softness: 0.05; spillSuppress: 0.92; edgeCrop: 0.02; edgeErode: 0.15"></a-video></a-entity>
+      <a-entity id="target_p18_19" mindar-image-target="targetIndex: 8" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p18_19" chromakey="videoSelector: #vid_p18_19; color: #00FF00; threshold: 0.12; softness: 0.05; spillSuppress: 0.92; edgeCrop: 0.02; edgeErode: 0.15"></a-video></a-entity>
+      <a-entity id="target_p20_21" mindar-image-target="targetIndex: 9" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p20_21" chromakey="videoSelector: #vid_p20_21; color: #00FF00; threshold: 0.12; softness: 0.05; spillSuppress: 0.92; edgeCrop: 0.02; edgeErode: 0.15"></a-video></a-entity>
+      <a-entity id="target_p22_23" mindar-image-target="targetIndex: 10" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p22_23" chromakey="videoSelector: #vid_p22_23; color: #00FF00; threshold: 0.12; softness: 0.05; spillSuppress: 0.92; edgeCrop: 0.02; edgeErode: 0.15"></a-video></a-entity>
     </a-scene>
 
     <script>
@@ -326,7 +346,7 @@
         const playButton = document.getElementById('playButton');
         const enableSoundBtn = document.getElementById('enableSound');
         const muteToggle = document.getElementById('muteToggle');
-        
+
         const controlBar = document.getElementById('controlBar');
         const progressSlider = document.getElementById('progressSlider');
         const pageInfo = document.getElementById('pageInfo');
@@ -336,9 +356,13 @@
         const ck_threshold = document.getElementById('ck-threshold');
         const ck_softness = document.getElementById('ck-softness');
         const ck_spill = document.getElementById('ck-spill');
+        const ck_edgecrop = document.getElementById('ck-edgecrop');
+        const ck_erode = document.getElementById('ck-erode');
         const ck_threshold_val = document.getElementById('ck-threshold-val');
         const ck_softness_val = document.getElementById('ck-softness-val');
         const ck_spill_val = document.getElementById('ck-spill-val');
+        const ck_edgecrop_val = document.getElementById('ck-edgecrop-val');
+        const ck_erode_val = document.getElementById('ck-erode-val');
         const ck_reset = document.getElementById('ck-reset');
         const ck_close = document.getElementById('ck-close');
 
@@ -356,13 +380,17 @@
           { targetId: 'target_p22_23', videoId: 'vid_p22_23', pageRange: '22-23' }
         ];
 
+        // Wie viele Nachbar-Segmente links/rechts vom aktuellen immer "warmgehalten" (durchgehend abgespielt) werden.
+        // Höher = zuverlässiger gegen schwarze Frames, aber mehr gleichzeitige Video-Decoder. 1 ist ein guter Kompromiss.
+        const PRELOAD_WINDOW = 1;
+
         let videosReady = false;
         let totalVideos = mappings.length;
         let preloadedCount = 0;
         let mappingData = {};
         let rafId = null;
         let audioStarted = false;
-        let currentTarget = null;
+        let controlBarShown = false;
         let chromakeySettings = JSON.parse(localStorage.getItem('tropfen.chromakey') || '{}');
 
         function setLoaderProgress(percentage, text){ if (loaderBar) loaderBar.style.width = (percentage*100)+'%'; if (loaderText && text) loaderText.textContent = text; }
@@ -426,38 +454,64 @@
           } catch(e){ console.warn('MindAR start error', e); }
         }
 
+        // Findet den Index des Segments, in dem sich Zeit t gerade befindet (oder das zuletzt begonnene, falls dazwischen).
+        function findCurrentIndex(t){
+          for (let i=0;i<mappings.length;i++){
+            const md = mappingData[mappings[i].videoId] || { startTime:0, duration:0 };
+            if (t >= md.startTime && t < md.startTime + md.duration) return i;
+          }
+          for (let i=mappings.length-1;i>=0;i--){
+            const md = mappingData[mappings[i].videoId] || { startTime:0, duration:0 };
+            if (t >= md.startTime) return i;
+          }
+          return 0;
+        }
+
+        // Hält das aktuelle Segment + PRELOAD_WINDOW Nachbarn links/rechts durchgehend am Laufen (gemutet, geloopt),
+        // statt Videos exakt bei Bedarf zu starten. Dadurch ist beim Erreichen eines Zeitfensters der Decoder
+        // bereits warm und gepuffert - kein schwarzer Frame mehr, egal ob vor- oder rückwärts.
+        function syncVideos(t, force){
+          const currentIndex = findCurrentIndex(t);
+
+          for (let i=0;i<mappings.length;i++){
+            const m = mappings[i];
+            const v = document.getElementById(m.videoId);
+            if (!v) continue;
+            const md = mappingData[m.videoId] || { startTime:0, duration:0 };
+            const rel = t - md.startTime;
+            const withinWindow = Math.abs(i - currentIndex) <= PRELOAD_WINDOW;
+
+            if (withinWindow) {
+              const clampedRel = Math.max(0, Math.min(rel, (md.duration || 0.001) - 0.05));
+              if (force || v.paused) {
+                try { v.currentTime = clampedRel; } catch(e){}
+                try { v.play().catch(()=>{}); } catch(e){}
+              } else if (Math.abs(v.currentTime - clampedRel) > 0.35) {
+                // Drift-Korrektur nur bei größerer Abweichung, um Ruckeln zu vermeiden
+                try { v.currentTime = clampedRel; } catch(e){}
+              }
+            } else {
+              if (!v.paused) { try { v.pause(); } catch(e){} }
+            }
+          }
+
+          return { currentIndex };
+        }
+
         function startSequenceController(){
           function step(){
             if (!audioStarted) { rafId = requestAnimationFrame(step); return; }
             const a = mainAudio; if (!a || a.paused) { rafId = requestAnimationFrame(step); return; }
             const t = a.currentTime;
-            
+
             // Update progress slider
             const totalDuration = a.duration || 1;
             progressSlider.value = (t / totalDuration) * 100;
             timeDisplay.textContent = formatTime(t);
 
-            // Update page info based on current time
-            let currentPage = '--';
-            for (const m of mappings) {
-              const md = mappingData[m.videoId] || { startTime:0, duration:0 };
-              const start = md.startTime || 0; const dur = md.duration || 0;
-              if (t >= start && t < start + dur) {
-                currentPage = m.pageRange;
-                break;
-              }
-            }
-            pageInfo.textContent = `Seite: ${currentPage}`;
+            const { currentIndex } = syncVideos(t, false);
+            pageInfo.textContent = `Seite: ${mappings[currentIndex] ? mappings[currentIndex].pageRange : '--'}`;
 
-            // Sync videos
-            for (const m of mappings) {
-              const v = document.getElementById(m.videoId); if (!v) continue;
-              const md = mappingData[m.videoId] || { startTime:0, duration:0 };
-              const start = md.startTime || 0; const dur = md.duration || 0; const rel = t - start;
-              if (rel >= 0 && rel < dur) {
-                try { if (Math.abs(v.currentTime - rel) > 0.15) v.currentTime = rel; if (v.paused) v.play().catch(()=>{}); } catch(e){}
-              } else { try { if (!v.paused) v.pause(); } catch(e){} }
-            }
             rafId = requestAnimationFrame(step);
           }
           if (!rafId) rafId = requestAnimationFrame(step);
@@ -470,12 +524,19 @@
           return `${mins}:${secs.toString().padStart(2, '0')}`;
         }
 
+        function showControlBarPermanently(){
+          if (controlBarShown) return;
+          controlBarShown = true;
+          controlBar.classList.add('visible');
+        }
+
         function setupPlayOverlayForAllTargets(){
           for (const m of mappings) {
             const targetEl = document.getElementById(m.targetId);
             if (!targetEl) continue;
-            targetEl.addEventListener('targetFound', () => { if (!videosReady) return; if (!audioStarted) playOverlay.classList.remove('hidden'); currentTarget = m.targetId; controlBar.classList.add('visible'); });
-            targetEl.addEventListener('targetLost', () => { playOverlay.classList.add('hidden'); controlBar.classList.remove('visible'); });
+            targetEl.addEventListener('targetFound', () => { if (!videosReady) return; if (!audioStarted) playOverlay.classList.remove('hidden'); });
+            targetEl.addEventListener('targetLost', () => { playOverlay.classList.add('hidden'); });
+            // Hinweis: die Control-Bar wird bewusst NICHT mehr bei targetLost/Pause versteckt (siehe showControlBarPermanently).
           }
         }
 
@@ -483,17 +544,16 @@
           if (shouldPlay) {
             playOverlay.classList.add('hidden');
             try { if (mainAudio) { mainAudio.muted = false; mainAudio.play().catch(()=>{}); } } catch(e){ console.warn('audio play failed', e); }
-            for (const m of mappings) {
-              const v = document.getElementById(m.videoId); if (!v) continue;
-              try { const pos = (mainAudio && !isNaN(mainAudio.currentTime)) ? mainAudio.currentTime - (mappingData[m.videoId] && mappingData[m.videoId].startTime ? mappingData[m.videoId].startTime : 0) : 0; if (pos >= 0) { v.currentTime = Math.max(0, pos); v.play().catch(()=>{}); } } catch(e){}
-            }
+            syncVideos(mainAudio ? mainAudio.currentTime : 0, true);
             audioStarted = true;
+            showControlBarPermanently();
             startSequenceController();
           } else {
             try { if (mainAudio && !mainAudio.paused) mainAudio.pause(); } catch(e){}
             for (const m of mappings) { const v = document.getElementById(m.videoId); try { if (v && !v.paused) v.pause(); } catch(e){} }
             audioStarted = false;
             playOverlay.classList.remove('hidden');
+            // controlBar bleibt sichtbar - nur der Play-Button erscheint wieder
           }
         }
 
@@ -507,14 +567,7 @@
           if (!mainAudio || !audioStarted) return;
           const newTime = (parseFloat(ev.target.value) / 100) * mainAudio.duration;
           mainAudio.currentTime = newTime;
-          
-          // Seek all videos
-          for (const m of mappings) {
-            const v = document.getElementById(m.videoId);
-            if (!v) continue;
-            const relTime = newTime - (mappingData[m.videoId] && mappingData[m.videoId].startTime ? mappingData[m.videoId].startTime : 0);
-            if (relTime >= 0) v.currentTime = relTime;
-          }
+          syncVideos(newTime, true);
         });
 
         document.addEventListener('click', (ev)=>{
@@ -537,7 +590,7 @@
             path.setAttribute('d', 'M3 10v4h4l5 5V5L7 10H3z');
           }
         }
-        
+
         muteToggle.addEventListener('click', (ev)=>{
           ev.stopPropagation();
           if (!mainAudio) return;
@@ -554,11 +607,13 @@
           const threshold = parseFloat(ck_threshold.value);
           const softness = parseFloat(ck_softness.value);
           const spill = parseFloat(ck_spill.value);
+          const edgeCrop = parseFloat(ck_edgecrop.value);
+          const edgeErode = parseFloat(ck_erode.value);
 
           for (const m of mappings) {
             const aVideoEntity = document.querySelector(`#${m.targetId} a-video`);
             if (aVideoEntity) {
-              aVideoEntity.setAttribute('chromakey', `threshold: ${threshold}; softness: ${softness}; spillSuppress: ${spill}`);
+              aVideoEntity.setAttribute('chromakey', `threshold: ${threshold}; softness: ${softness}; spillSuppress: ${spill}; edgeCrop: ${edgeCrop}; edgeErode: ${edgeErode}`);
             }
           }
 
@@ -566,20 +621,26 @@
           ck_threshold_val.textContent = threshold.toFixed(2);
           ck_softness_val.textContent = softness.toFixed(2);
           ck_spill_val.textContent = spill.toFixed(2);
+          ck_edgecrop_val.textContent = edgeCrop.toFixed(3);
+          ck_erode_val.textContent = edgeErode.toFixed(2);
 
           // Save to localStorage
-          chromakeySettings = { threshold, softness, spill };
+          chromakeySettings = { threshold, softness, spill, edgeCrop, edgeErode };
           localStorage.setItem('tropfen.chromakey', JSON.stringify(chromakeySettings));
         }
 
         ck_threshold.addEventListener('input', updateAllChromakeyShaders);
         ck_softness.addEventListener('input', updateAllChromakeyShaders);
         ck_spill.addEventListener('input', updateAllChromakeyShaders);
+        ck_edgecrop.addEventListener('input', updateAllChromakeyShaders);
+        ck_erode.addEventListener('input', updateAllChromakeyShaders);
 
         ck_reset.addEventListener('click', () => {
-          ck_threshold.value = 0.10;
-          ck_softness.value = 0.04;
-          ck_spill.value = 0.98;
+          ck_threshold.value = 0.12;
+          ck_softness.value = 0.05;
+          ck_spill.value = 0.92;
+          ck_edgecrop.value = 0.02;
+          ck_erode.value = 0.15;
           updateAllChromakeyShaders();
         });
 
@@ -631,11 +692,13 @@
 
         window.addEventListener('load', async ()=>{
           if (loader) loader.classList.remove('hidden'); setLoaderProgress(0,'Starte Laden...'); await preloadAllVideos(); await startMindARAfterPreload(); attachVisibilityHandlers(); setupPlayOverlayForAllTargets();
-          
+
           // Restore chromakey settings
-          if (chromakeySettings.threshold) ck_threshold.value = chromakeySettings.threshold;
-          if (chromakeySettings.softness) ck_softness.value = chromakeySettings.softness;
-          if (chromakeySettings.spill) ck_spill.value = chromakeySettings.spill;
+          if (chromakeySettings.threshold !== undefined) ck_threshold.value = chromakeySettings.threshold;
+          if (chromakeySettings.softness !== undefined) ck_softness.value = chromakeySettings.softness;
+          if (chromakeySettings.spill !== undefined) ck_spill.value = chromakeySettings.spill;
+          if (chromakeySettings.edgeCrop !== undefined) ck_edgecrop.value = chromakeySettings.edgeCrop;
+          if (chromakeySettings.edgeErode !== undefined) ck_erode.value = chromakeySettings.edgeErode;
           updateAllChromakeyShaders();
         });
 
