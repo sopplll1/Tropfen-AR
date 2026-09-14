@@ -29,27 +29,27 @@
       /* Center play overlay (larger button) */
       #playOverlay { position: fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:11000; pointer-events:none; }
       #playOverlay.hidden { display:none; }
-      #playOverlay button { pointer-events:auto; background: rgba(255,255,255,0.95); border:none; padding:26px; width:80px; height:80px; font-size:26px; border-radius:999px; cursor:pointer; box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
+      #playOverlay button { pointer-events:auto; background: rgba(255,255,255,0.95); border:none; padding:26px; width:80px; height:80px; font-size:26px; border-radius:999px; cursor:pointer; box-shadow: 0 8px 24px rgba(0,0,0,0.15); }
       #playOverlay svg { width:40px; height:40px; fill:#111; }
       #playOverlay button:active { transform:scale(0.97); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
       #playOverlay button:hover { box-shadow: 0 12px 32px rgba(0,0,0,0.2); }
 
       /* Control Bar (progress + page indicator) - jetzt größer & bleibt sichtbar */
-      #controlBar { position: fixed; bottom: 90px; left: 10px; right: 10px; z-index: 11500; background: rgba(255,255,255,0.97); border-radius:14px; padding:16px 18px 14px; display:none; box-shadow: 0 6px 20px rgba(0,0,0,0.25); }
+      #controlBar { position: fixed; bottom: 90px; left: 10px; right: 10px; z-index: 11500; background: rgba(255,255,255,0.97); border-radius:14px; padding:16px 18px 14px; display:none; box-shadow: 0 8px 24px rgba(0,0,0,0.15); }
       #controlBar.visible { display: block; }
       #controlBar .page-info { text-align: center; color:#111; font-size:18px; font-weight:bold; margin-bottom:10px; }
       #controlBar .progress-container { display:flex; align-items:center; gap:10px; }
       #controlBar .progress-slider { flex:1; height:10px; background: rgba(0,0,0,0.12); border-radius:5px; cursor:pointer; -webkit-appearance: none; appearance: none; }
-      #controlBar .progress-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width:24px; height:24px; border-radius:50%; background:#4ade80; cursor:pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 3px solid #fff; }
+      #controlBar .progress-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width:24px; height:24px; border-radius:50%; background:#4ade80; cursor:pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
       #controlBar .progress-slider::-moz-range-thumb { width:24px; height:24px; border-radius:50%; background:#4ade80; cursor:pointer; border: 3px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
       #controlBar .time-display { color:#111; font-size:15px; min-width:60px; text-align:right; font-weight:600; }
 
       /* Mute toggle button (much larger, bottom-left) */
-      #muteToggle { position: fixed; left: 12px; bottom: 12px; z-index: 11000; background: rgba(255,255,255,0.95); border: none; border-radius:8px; padding:14px; display:flex; align-items:center; justify-content:center; cursor:pointer; width:56px; height:56px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transition: all 0.2s; }
+      #muteToggle { position: fixed; left: 12px; bottom: 12px; z-index: 11000; background: rgba(255,255,255,0.95); border: none; border-radius:8px; padding:14px; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
       #muteToggle:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.2); }
       #muteToggle svg { width:32px; height:32px; fill:#111; transition: opacity 0.3s; }
       #muteToggle.muted svg { opacity:0.4; }
-      #muteToggle.muted::after { content: ''; position:absolute; width:4px; height:50px; background:#f44336; transform:rotate(-45deg); border-radius:2px; pointer-events:none; box-shadow: 0 0 4px rgba(244,67,54,0.6); }
+      #muteToggle.muted::after { content: ''; position:absolute; width:4px; height:50px; background:#f44336; transform:rotate(-45deg); border-radius:2px; pointer-events:none; box-shadow: 0 0 4px rgba(244,67,54,0.5); }
 
       /* Hide MindAR / A-Frame builtin UI elements - inkl. der separaten AR-Enter-Buttons (rechts unten),
          die bei neueren A-Frame Versionen NICHT von .a-enter-vr-button abgedeckt werden */
@@ -63,7 +63,7 @@
 
       /* Scene z-index / canvas */
       a-scene { z-index: 1; }
-      a-scene canvas { position: absolute; left: 0; top: 0; width: 100% !important; height: 100% !important; z-index: 1 !important; image-rendering: -webkit-optimize-contrast; }
+      a-scene canvas { position: absolute; left: 0; top: 0; width: 100% !important; height: 100% !important; z-index: 1 !important; image-rendering: auto !important; }
 
       /* Kamera-Video: Optimiert für Klarheit und Fullscreen */
       video[playsinline], video[webkit-playsinline] {
@@ -79,8 +79,7 @@
         z-index: 0 !important;
         backface-visibility: hidden !important;
         -webkit-backface-visibility: hidden !important;
-        image-rendering: high-quality !important;
-        image-rendering: crisp-edges !important;
+        image-rendering: auto !important;
       }
 
       .mindar-video { position: fixed !important; left: 0 !important; top: 0 !important; transform: none !important; width: 100% !important; height: 100% !important; object-fit: cover !important; backface-visibility: hidden !important; }
@@ -250,7 +249,7 @@
     <button id="enableSound" aria-hidden="true">Ton aktivieren</button>
 
     <!-- MindAR scene (UI-Elemente deaktiviert) -->
-    <a-scene mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 1; uiLoading: false; uiScanning: false; uiError: false; uiTarget: false" color-space="sRGB" renderer="colorManagement: true; physically: true; antialias: true; pixelRatio: auto" device-orientation-permission-ui="enabled: false" vr-mode-ui="enabled: false">
+    <a-scene mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 1; uiLoading: false; uiScanning: false; uiError: false; uiTarget: false" color-space="sRGB" renderer="colorManagement: true; physicallyCorrectLights: true; antialias: true; alpha: true; precision: highp" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
       <a-assets>
         <audio id="mainAudio" src="./assets/Kompletter_song.mp3" crossorigin="anonymous" preload="auto"></audio>
 
@@ -271,17 +270,17 @@
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
       <!-- Targets mit verbesserter Stabilität -->
-      <a-entity id="target_p1" mindar-image-target="targetIndex: 0" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p1" chromakey="videoSelector: #vid_p1; color: #00FF00; threshold: 0.35; softness: 0.10; spillSuppress: 0.70; edgeCrop: 0.01"></a-video></a-entity>
-      <a-entity id="target_p4_5" mindar-image-target="targetIndex: 1" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p4_5" chromakey="videoSelector: #vid_p4_5; color: #00FF00; threshold: 0.35; softness: 0.10; spillSuppress: 0.70; edgeCrop: 0.01"></a-video></a-entity>
-      <a-entity id="target_p6_7" mindar-image-target="targetIndex: 2" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p6_7" chromakey="videoSelector: #vid_p6_7; color: #00FF00; threshold: 0.35; softness: 0.10; spillSuppress: 0.70; edgeCrop: 0.01"></a-video></a-entity>
-      <a-entity id="target_p8_9" mindar-image-target="targetIndex: 3" stable-transform="smoothing:0.45"><a-video visible="false" src="#vid_p8_9" chromakey="videoSelector: #vid_p8_9; color: #00FF00; threshold: 0.35; softness: 0.10; spillSuppress: 0.70; edgeCrop: 0.01"></a-video></a-entity>
-      <a-entity id="target_p10_11" mindar-image-target="targetIndex: 4" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p10_11" chromakey="videoSelector: #vid_p10_11; color: #00FF00; threshold: 0.35; softness: 0.10; spillSuppress: 0.70; edgeCrop: 0.01"></a-video></a-entity>
-      <a-entity id="target_p12_13" mindar-image-target="targetIndex: 5" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p12_13" chromakey="videoSelector: #vid_p12_13; color: #00FF00; threshold: 0.35; softness: 0.10; spillSuppress: 0.70; edgeCrop: 0.01"></a-video></a-entity>
-      <a-entity id="target_p14_15" mindar-image-target="targetIndex: 6" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p14_15" chromakey="videoSelector: #vid_p14_15; color: #00FF00; threshold: 0.35; softness: 0.10; spillSuppress: 0.70; edgeCrop: 0.01"></a-video></a-entity>
-      <a-entity id="target_p16_17" mindar-image-target="targetIndex: 7" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p16_17" chromakey="videoSelector: #vid_p16_17; color: #00FF00; threshold: 0.35; softness: 0.10; spillSuppress: 0.70; edgeCrop: 0.01"></a-video></a-entity>
-      <a-entity id="target_p18_19" mindar-image-target="targetIndex: 8" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p18_19" chromakey="videoSelector: #vid_p18_19; color: #00FF00; threshold: 0.35; softness: 0.10; spillSuppress: 0.70; edgeCrop: 0.01"></a-video></a-entity>
-      <a-entity id="target_p20_21" mindar-image-target="targetIndex: 9" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p20_21" chromakey="videoSelector: #vid_p20_21; color: #00FF00; threshold: 0.35; softness: 0.10; spillSuppress: 0.70; edgeCrop: 0.01"></a-video></a-entity>
-      <a-entity id="target_p22_23" mindar-image-target="targetIndex: 10" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p22_23" chromakey="videoSelector: #vid_p22_23; color: #00FF00; threshold: 0.35; softness: 0.10; spillSuppress: 0.70; edgeCrop: 0.01"></a-video></a-entity>
+      <a-entity id="target_p1" mindar-image-target="targetIndex: 0" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p1" chromakey="videoSelector: #vid_p1; color: #00FF00; threshold: 0.35; softness: 0.10; spillSuppress: 0.70; edgeCrop: 0.01" scale="1 1 1"></a-video></a-entity>
+      <a-entity id="target_p4_5" mindar-image-target="targetIndex: 1" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p4_5" chromakey="videoSelector: #vid_p4_5; color: #00FF00; threshold: 0.35; softness: 0.10; spillSuppress: 0.70; edgeCrop: 0.01" scale="1 1 1"></a-video></a-entity>
+      <a-entity id="target_p6_7" mindar-image-target="targetIndex: 2" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p6_7" chromakey="videoSelector: #vid_p6_7; color: #00FF00; threshold: 0.35; softness: 0.10; spillSuppress: 0.70; edgeCrop: 0.01" scale="1 1 1"></a-video></a-entity>
+      <a-entity id="target_p8_9" mindar-image-target="targetIndex: 3" stable-transform="smoothing:0.45"><a-video visible="false" src="#vid_p8_9" chromakey="videoSelector: #vid_p8_9; color: #00FF00; threshold: 0.35; softness: 0.10; spillSuppress: 0.70; edgeCrop: 0.01" scale="1 1 1"></a-video></a-entity>
+      <a-entity id="target_p10_11" mindar-image-target="targetIndex: 4" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p10_11" chromakey="videoSelector: #vid_p10_11; color: #00FF00; threshold: 0.35; softness: 0.10; spillSuppress: 0.70; edgeCrop: 0.01" scale="1 1 1"></a-video></a-entity>
+      <a-entity id="target_p12_13" mindar-image-target="targetIndex: 5" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p12_13" chromakey="videoSelector: #vid_p12_13; color: #00FF00; threshold: 0.35; softness: 0.10; spillSuppress: 0.70; edgeCrop: 0.01" scale="1 1 1"></a-video></a-entity>
+      <a-entity id="target_p14_15" mindar-image-target="targetIndex: 6" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p14_15" chromakey="videoSelector: #vid_p14_15; color: #00FF00; threshold: 0.35; softness: 0.10; spillSuppress: 0.70; edgeCrop: 0.01" scale="1 1 1"></a-video></a-entity>
+      <a-entity id="target_p16_17" mindar-image-target="targetIndex: 7" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p16_17" chromakey="videoSelector: #vid_p16_17; color: #00FF00; threshold: 0.35; softness: 0.10; spillSuppress: 0.70; edgeCrop: 0.01" scale="1 1 1"></a-video></a-entity>
+      <a-entity id="target_p18_19" mindar-image-target="targetIndex: 8" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p18_19" chromakey="videoSelector: #vid_p18_19; color: #00FF00; threshold: 0.35; softness: 0.10; spillSuppress: 0.70; edgeCrop: 0.01" scale="1 1 1"></a-video></a-entity>
+      <a-entity id="target_p20_21" mindar-image-target="targetIndex: 9" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p20_21" chromakey="videoSelector: #vid_p20_21; color: #00FF00; threshold: 0.35; softness: 0.10; spillSuppress: 0.70; edgeCrop: 0.01" scale="1 1 1"></a-video></a-entity>
+      <a-entity id="target_p22_23" mindar-image-target="targetIndex: 10" stable-transform="smoothing:0.35"><a-video visible="false" src="#vid_p22_23" chromakey="videoSelector: #vid_p22_23; color: #00FF00; threshold: 0.35; softness: 0.10; spillSuppress: 0.70; edgeCrop: 0.01" scale="1 1 1"></a-video></a-entity>
     </a-scene>
 
     <script>
@@ -614,40 +613,6 @@
         function hideEnableSound(){ if (!enableSoundBtn) return; enableSoundBtn.setAttribute('aria-hidden','true'); enableSoundBtn.style.display='none'; enableSoundBtn.classList.remove('debug-visible'); }
         enableSoundBtn.addEventListener('click', async ()=>{ try{ if (mainAudio) mainAudio.muted = false; if (mainAudio) await mainAudio.play(); hideEnableSound(); updateMuteIcon(); } catch(e){ console.warn('enable sound failed', e); } });
 
-
-          // Update display values
-          ck_threshold_val.textContent = threshold.toFixed(2);
-          ck_softness_val.textContent = softness.toFixed(2);
-          ck_spill_val.textContent = spill.toFixed(2);
-          ck_edgecrop_val.textContent = edgeCrop.toFixed(3);
-          ck_erode_val.textContent = edgeErode.toFixed(2);
-
-          // Save to localStorage
-          chromakeySettings = { threshold, softness, spill, edgeCrop, edgeErode };
-          localStorage.setItem('tropfen.chromakey', JSON.stringify(chromakeySettings));
-        }
-
-        ck_threshold.addEventListener('input', updateAllChromakeyShaders);
-        ck_softness.addEventListener('input', updateAllChromakeyShaders);
-        ck_spill.addEventListener('input', updateAllChromakeyShaders);
-        ck_edgecrop.addEventListener('input', updateAllChromakeyShaders);
-        ck_erode.addEventListener('input', updateAllChromakeyShaders);
-
-        ck_reset.addEventListener('click', () => {
-          ck_threshold.value = 0.12;
-          ck_softness.value = 0.05;
-          ck_spill.value = 0.92;
-          ck_edgecrop.value = 0.02;
-          ck_erode.value = 0.15;
-          updateAllChromakeyShaders();
-        });
-
-        ck_close.addEventListener('click', () => {
-          chromakeyPanel.classList.remove('visible');
-        });
-
-  
-
         // Entfernt AR/VR/XR-Enter-Buttons aktiv aus dem DOM, falls A-Frame sie per Inline-Style
         // wieder sichtbar macht (die CSS-Regel allein reicht bei manchen A-Frame Versionen nicht).
         function removeXrButtons(){
@@ -656,20 +621,16 @@
         }
 
         window.addEventListener('load', async ()=>{
-          if (loader) loader.classList.remove('hidden'); setLoaderProgress(0,'Starte Laden...'); await preloadAllVideos(); await startMindARAfterPreload(); attachVisibilityHandlers(); setupPlayOverlayForAllTargets();
+          if (loader) loader.classList.remove('hidden');
+          setLoaderProgress(0,'Starte Laden...');
+          await preloadAllVideos();
+          await startMindARAfterPreload();
+          setupPlayOverlayForAllTargets();
           removeXrButtons();
           setTimeout(removeXrButtons, 1000);
           setTimeout(removeXrButtons, 3000);
           const scene = document.querySelector('a-scene');
           if (scene) scene.addEventListener('loaded', removeXrButtons);
-
-          // Restore chromakey settings
-          if (chromakeySettings.threshold !== undefined) ck_threshold.value = chromakeySettings.threshold;
-          if (chromakeySettings.softness !== undefined) ck_softness.value = chromakeySettings.softness;
-          if (chromakeySettings.spill !== undefined) ck_spill.value = chromakeySettings.spill;
-          if (chromakeySettings.edgeCrop !== undefined) ck_edgecrop.value = chromakeySettings.edgeCrop;
-          if (chromakeySettings.edgeErode !== undefined) ck_erode.value = chromakeySettings.edgeErode;
-          updateAllChromakeyShaders();
         });
 
         window.__TROPFEN = { mappings, mappingData, get videosReady(){ return videosReady; }, get audioStarted(){ return audioStarted; }, get chromakeySettings(){ return chromakeySettings; } };
